@@ -125,14 +125,14 @@ app.post("/book", async (req, res) => {
 
   try {
     await transporter.sendMail({
-      from: process.env.EMAIL_USER,
-      to: process.env.EMAIL_USER,
+      from: process.env.EMAIL_FROM,
+      to: process.env.TO_EMAIL,
       subject: `New Booking Request from ${name}`,
       text: `Name: ${name}\nEmail: ${email}\nPhone: ${phone}\nRoom: ${room}\nGuests: ${guests}\nCheck-in: ${checkIn}\nCheck-out: ${checkOut}`,
     });
 
     await transporter.sendMail({
-      from: process.env.EMAIL_USER,
+      from: process.env.EMAIL_FROM,
       to: email,
       subject: "Your Booking Request at Minister of Enjoyment Hotel",
       html: `<h2>Hello ${name},</h2><p>We received your booking for <b>${room}</b> from <b>${checkIn}</b> to <b>${checkOut}</b> for <b>${guests} guest(s)</b>.</p>`,
