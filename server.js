@@ -12,6 +12,9 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.get("/", (req, res) => {
   res.send("Hotel Booking API is running...");
 });
+app.get('/api/test', (req, res) => {
+  res.send('API is working ✅');
+});
 // ✅ Connect or create database
 const db = new sqlite3.Database("./hotel.db", (err) => {
   if (err) console.error("❌ Database error:", err.message);
