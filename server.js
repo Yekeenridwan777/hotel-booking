@@ -15,6 +15,9 @@ app.get("/", (req, res) => {
 app.get('/api/test', (req, res) => {
   res.send('API is working ✅');
 });
+app.get("/api/test", (req, res) => {
+  res.json({ status: "success", message: "Test route is working!" });
+});
 // ✅ Connect or create database
 const db = new sqlite3.Database("./hotel.db", (err) => {
   if (err) console.error("❌ Database error:", err.message);
