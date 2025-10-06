@@ -141,19 +141,26 @@ async function sendContactEmails(name, email, message) {
 
 
 // ---------- Booking Email Logic ----------
-async function sendBookingEmails(booking) {
-  const { name, email, phone, room, guests, checkIn, checkOut } = booking;
+async function sendBookingEmails(name, email, phone, room, guests, checkIn, checkOut) {
   const from = process.env.EMAIL_FROM || process.env.ADMIN_EMAIL;
   const admin = process.env.ADMIN_EMAIL;
 
-  try {
-    // Send to admin
-    await sendTransacEmail({
-      fromEmail: from,
-      toEmails: [admin],
-      subject: `🏨 New Booking from ${name}`,
-      htmlContent: `
-        <h2>New Booking Received</h2>
+  // --- Email to admin ---
+  await sendTransacEmail({
+    fromEmail: from,
+    toEmails: [admin],
+    subject: `New Booking Received from ${name}`,
+    textContent: `New booking details:
+Name: ${name}
+Email: ${email}
+Phone: ${phone}
+Room: ${room}
+Guests: ${guests}
+Check-in: ${checkIn}
+Check-out: ${checkOut}`,
+    htmlContent: `
+      <div style="font-family:Arial,sans-serif">
+        <h3>New Booking Received</h3>
         <p><strong>Name:</strong> ${name}</p>
         <p><strong>Email:</strong> ${email}</p>
         <p><strong>Phone:</strong> ${phone}</p>
@@ -161,28 +168,43 @@ async function sendBookingEmails(booking) {
         <p><strong>Guests:</strong> ${guests}</p>
         <p><strong>Check-in:</strong> ${checkIn}</p>
         <p><strong>Check-out:</strong> ${checkOut}</p>
-      `
-    });
+      </div>`
+  });
 
-    // Auto reply
-    await sendTransacEmail({
-      fromEmail: from,
-      toEmails: [email],
-      subject: `Booking Confirmation - ${process.env.HOTEL_NAME || "Minister of Enjoyment Hotel"}`,
-      htmlContent: `
+  // --- Auto reply to guest ---
+  await sendTransacEmail({
+    fromEmail: from,
+    toEmails: [email],
+    subject: `Booking Confirmation — ${process.env.HOTEL_NAME || "Minister of Enjoyment Hotel"}`,
+    textContent: `Hello ${name},
+
+Thank you for booking with ${process.env.HOTEL_NAME || "Minister of Enjoyment Hotel"}.
+Here are your booking details:
+
+Room: ${room}
+Guests: ${guests}
+Check-in: ${checkIn}
+Check-out: ${checkOut}
+
+We look forward to your stay!
+
+— ${process.env.HOTEL_NAME || "Minister of Enjoyment Hotel"}`,
+    htmlContent: `
+      <div style="font-family:Arial,sans-serif">
         <h3>Hello ${name},</h3>
-        <p>Thank you for booking <strong>${room}</strong> at ${process.env.HOTEL_NAME || "Minister of Enjoyment Hotel"}.</p>
-        <p>Your stay is from <strong>${checkIn}</strong> to <strong>${checkOut}</strong> for <strong>${guests}</strong> guests.</p>
-        <p>We look forward to hosting you!</p>
-      `
-    });
-
-    console.log("✅ Booking emails sent to admin and client");
-  } catch (err) {
-    console.error("❌ Email error (booking):", err.message);
-  }
+        <p>Thank you for booking with <strong>${process.env.HOTEL_NAME || "Minister of Enjoyment Hotel"}</strong>.</p>
+        <p>Here are your booking details:</p>
+        <ul>
+          <li><strong>Room:</strong> ${room}</li>
+          <li><strong>Guests:</strong> ${guests}</li>
+          <li><strong>Check-in:</strong> ${checkIn}</li>
+          <li><strong>Check-out:</strong> ${checkOut}</li>
+        </ul>
+        <p>We look forward to your stay!</p>
+        <p>— ${process.env.HOTEL_NAME || "Minister of Enjoyment Hotel"}</p>
+      </div>`
+  });
 }
-
 
 
 // ---------- PUBLIC ROUTES ----------
