@@ -71,7 +71,7 @@ function dbGet(sql, params = []) {
 // ---------- Brevo setup ----------
 const brevoClient = new Brevo.TransactionalEmailsApi();
 if (!process.env.BREVO_API_KEY) {
-  console.warn("⚠ BREVO_API_KEY is not set. Emails will fail.");
+  console.warn("⚠️ BREVO_API_KEY is not set. Emails will fail.");
 } else {
   brevoClient.setApiKey(Brevo.TransactionalEmailsApiApiKeys.apiKey, process.env.BREVO_API_KEY);
 }
@@ -103,18 +103,18 @@ async function sendContactEmails(name, email, message) {
   await sendTransacEmail({
     fromEmail: from,
     toEmails: [admin],
-    subject: New Contact from ${name},
-    textContent: Name: ${name}\nEmail: ${email}\nMessage:\n${message},
-    htmlContent: <p><strong>Name:</strong> ${name}</p><p><strong>Email:</strong> ${email}</p><p><strong>Message:</strong><br/>${message}</p>
+    subject: `New Contact from ${name}`,
+    textContent: `Name: ${name}\nEmail: ${email}\nMessage:\n${message}`,
+    htmlContent: `<p><strong>Name:</strong> ${name}</p><p><strong>Email:</strong> ${email}</p><p><strong>Message:</strong><br/>${message}</p>`
   });
 
   // auto-reply to sender
   await sendTransacEmail({
     fromEmail: from,
     toEmails: [email],
-    subject: Thanks for contacting ${process.env.HOTEL_NAME || "Minister of Enjoyment Hotel"},
-    textContent: Hi ${name},\n\nThanks for reaching out. We received your message and will get back to you shortly.\n\n— ${process.env.HOTEL_NAME || "Minister of Enjoyment Hotel"},
-    htmlContent: <div style="font-family:Arial,sans-serif"><h3>Hi ${name},</h3><p>Thanks for reaching out. We received your message and will get back to you shortly.</p><p>— ${process.env.HOTEL_NAME || "Minister of Enjoyment Hotel"}</p></div>
+    subject: `Thanks for contacting ${process.env.HOTEL_NAME || "Minister of Enjoyment Hotel"}`,
+    textContent: `Hi ${name},\n\nThanks for reaching out. We received your message and will get back to you shortly.\n\n— ${process.env.HOTEL_NAME || "Minister of Enjoyment Hotel"}`,
+    htmlContent: `<div style="font-family:Arial,sans-serif"><h3>Hi ${name},</h3><p>Thanks for reaching out. We received your message and will get back to you shortly.</p><p>— ${process.env.HOTEL_NAME || "Minister of Enjoyment Hotel"}</p></div>`
   });
 }
 
@@ -125,18 +125,18 @@ async function sendBookingEmails(name, email, room, checkIn, checkOut, guests) {
   await sendTransacEmail({
     fromEmail: from,
     toEmails: [admin],
-    subject: New Booking Received from ${name},
-    textContent: New booking\nName: ${name}\nEmail: ${email}\nPhone: ${phone || "N/A"}\nRoom: ${room}\nGuests: ${guests}\nCheck-in: ${checkIn}\nCheck-out: ${checkOut},
-    htmlContent: <p><strong>Name:</strong> ${name}</p><p><strong>Email:</strong> ${email}</p><p><strong>Room:</strong> ${room}</p><p><strong>Guests:</strong> ${guests}</p><p><strong>Check-in:</strong> ${checkIn}</p><p><strong>Check-out:</strong> ${checkOut}</p>
+    subject: `New Booking Received from ${name}`,
+    textContent: `New booking\nName: ${name}\nEmail: ${email}\nPhone: ${phone || "N/A"}\nRoom: ${room}\nGuests: ${guests}\nCheck-in: ${checkIn}\nCheck-out: ${checkOut}`,
+    htmlContent: `<p><strong>Name:</strong> ${name}</p><p><strong>Email:</strong> ${email}</p><p><strong>Room:</strong> ${room}</p><p><strong>Guests:</strong> ${guests}</p><p><strong>Check-in:</strong> ${checkIn}</p><p><strong>Check-out:</strong> ${checkOut}</p>`
   });
 
   // guest confirmation
   await sendTransacEmail({
     fromEmail: from,
     toEmails: [email],
-    subject: Booking Received — ${process.env.HOTEL_NAME || "Minister of Enjoyment Hotel"},
-    textContent: Hello ${name},\n\nWe received your booking for ${room} from ${checkIn} to ${checkOut}. We'll confirm shortly.\n\nThanks,\n${process.env.HOTEL_NAME || "Minister of Enjoyment Hotel"},
-    htmlContent: <div style="font-family:Arial,sans-serif"><h3>Hello ${name},</h3><p>We received your booking for <strong>${room}</strong> from <strong>${checkIn}</strong> to <strong>${checkOut}</strong>. We'll confirm shortly.</p><p>Thanks,<br/>${process.env.HOTEL_NAME || "Minister of Enjoyment Hotel"}</p></div>
+    subject: `Booking Received — ${process.env.HOTEL_NAME || "Minister of Enjoyment Hotel"}`,
+    textContent: `Hello ${name},\n\nWe received your booking for ${room} from ${checkIn} to ${checkOut}. We'll confirm shortly.\n\nThanks,\n${process.env.HOTEL_NAME || "Minister of Enjoyment Hotel"}`,
+    htmlContent: `<div style="font-family:Arial,sans-serif"><h3>Hello ${name},</h3><p>We received your booking for <strong>${room}</strong> from <strong>${checkIn}</strong> to <strong>${checkOut}</strong>. We'll confirm shortly.</p><p>Thanks,<br/>${process.env.HOTEL_NAME || "Minister of Enjoyment Hotel"}</p></div>`
   });
 }
 
@@ -148,7 +148,7 @@ app.post("/contact", async (req, res) => {
     const { name = "", email = "", message = "" } = req.body;
 
     // Save to DB
-    await dbRun(INSERT INTO contacts (name, email, message) VALUES (?, ?, ?), [name, email, message]);
+    await dbRun(`INSERT INTO contacts (name, email, message) VALUES (?, ?, ?)`, [name, email, message]);
 
     // Attempt to send emails (Brevo)
     try {
@@ -181,10 +181,10 @@ app.post("/book", async (req, res) => {
 
     // Insert booking and wait
     await dbRun(
-      INSERT INTO bookings (name, email, phone, room, guests, check_in, check_out) VALUES (?, ?, ?, ?, ?, ?, ?),
+      `INSERT INTO bookings (name, email, phone, room, guests, check_in, check_out) VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [name, email, phone, room, guests, checkIn, checkOut]
     );
-    console.log(✅ Booking saved for ${name});
+    console.log(`✅ Booking saved for ${name}`);
 
     // Attempt to send booking emails (Brevo). Don't fail the whole request if email fails.
     try {
@@ -269,7 +269,7 @@ function renderPage(title, heading, headers, rows) {
         <div class="table-responsive">
           <table class="table table-striped table-bordered align-middle">
             <thead class="table-dark">
-              <tr>${headers.map(h => <th>${h}</th>).join("")}</tr>
+              <tr>${headers.map(h => `<th>${h}</th>`).join("")}</tr>
             </thead>
             <tbody>
               ${rows}
@@ -354,7 +354,7 @@ app.get("/admin/bookings/edit/:id", requireLogin, async (req, res) => {
 
 app.post("/admin/bookings/edit/:id", requireLogin, (req, res) => {
   const { name, email, phone, room, guests, check_in, check_out } = req.body;
-  db.run(UPDATE bookings SET name=?, email=?, phone=?, room=?, guests=?, check_in=?, check_out=? WHERE id=?,
+  db.run(`UPDATE bookings SET name=?, email=?, phone=?, room=?, guests=?, check_in=?, check_out=? WHERE id=?`,
     [name, email, phone, room, guests, check_in, check_out, req.params.id],
     (err) => {
       if (err) {
@@ -426,7 +426,7 @@ app.get("/admin/contacts/edit/:id", requireLogin, async (req, res) => {
 
 app.post("/admin/contacts/edit/:id", requireLogin, (req, res) => {
   const { name, email, message } = req.body;
-  db.run(UPDATE contacts SET name=?, email=?, message=? WHERE id=?, [name, email, message, req.params.id], (err) => {
+  db.run(`UPDATE contacts SET name=?, email=?, message=? WHERE id=?`, [name, email, message, req.params.id], (err) => {
     if (err) return res.status(500).send("Error updating contact");
     res.redirect("/admin/contacts");
   });
@@ -434,4 +434,4 @@ app.post("/admin/contacts/edit/:id", requireLogin, (req, res) => {
 
 // ---------- Start server ----------
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(🚀 Running at http://localhost:${PORT}));
+app.listen(PORT, () => console.log(`🚀 Running at http://localhost:${PORT}`));
