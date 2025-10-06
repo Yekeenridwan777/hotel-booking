@@ -224,24 +224,25 @@ app.post("/book", async (req, res) => {
       guests = 1,
     } = req.body;
 
-    // Insert booking and wait
+    // Insert booking into the database
     await dbRun(
-      `INSERT INTO bookings (name, email, phone, room, guests, check_in, check_out) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO bookings (name, email, phone, room, guests, check_in, check_out)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [name, email, phone, room, guests, checkIn, checkOut]
     );
     console.log(`✅ Booking saved for ${name}`);
 
-    // Attempt to send booking emails (Brevo). Don't fail the whole request if email fails.
+    // Attempt to send booking emails (Brevo)
     try {
-      await sendBookingEmails(name, email, room, checkIn, checkOut, guests);
-      console.log("✅ Booking emails sent");
+      await sendBookingEmails(name, email, phone, room, guests, checkIn, checkOut);
+      console.log("✅ Booking emails sent successfully");
+      return res.json({ success: true, message: "Booking saved & email sent" });
     } catch (err) {
       console.error("❌ Email error (booking):", err && err.message ? err.message : err);
-      // If email fails, still return success for booking saved.
+      // Still succeed for booking saved even if email fails
       return res.json({ success: true, message: "Booking saved (email failed to send)" });
     }
 
-    return res.json({ success: true, message: "Booking saved & email sent" });
   } catch (err) {
     console.error("❌ /book error:", err);
     return res.status(500).json({ success: false, message: "Server error" });
