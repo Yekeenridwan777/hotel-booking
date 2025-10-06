@@ -99,38 +99,7 @@ async function sendTransacEmail({ fromEmail, toEmails = [], subject = "", htmlCo
 }
 
 // ---------- Contact Email Logic ----------
-async function sendContactEmails(name, email, message) {
-  const from = process.env.EMAIL_FROM || process.env.ADMIN_EMAIL;
-  const admin = process.env.ADMIN_EMAIL;
 
-  // Notify admin
-  await sendTransacEmail({
-    fromEmail: from,
-    toEmails: [admin],
-    subject: `New Contact from ${name}`,
-    textContent: `Name: ${name}\nEmail: ${email}\nMessage:\n${message}`,
-    htmlContent: `
-      <p><strong>Name:</strong> ${name}</p>
-      <p><strong>Email:</strong> ${email}</p>
-      <p><strong>Message:</strong><br/>${message}</p>
-    `,
-  });
-
-  // Auto reply to sender
-  await sendTransacEmail({
-    fromEmail: from,
-    toEmails: [email],
-    subject: `Thanks for contacting ${process.env.HOTEL_NAME || "Minister of Enjoyment Hotel"}`,
-    textContent: `Hi ${name},\n\nThanks for reaching out. We received your message and will get back to you shortly.\n\n— ${process.env.HOTEL_NAME || "Minister of Enjoyment Hotel"}`,
-    htmlContent: `
-      <div style="font-family:Arial,sans-serif">
-        <h3>Hi ${name},</h3>
-        <p>Thanks for reaching out. We received your message and will get back to you shortly.</p>
-        <p>— ${process.env.HOTEL_NAME || "Minister of Enjoyment Hotel"}</p>
-      </div>
-    `,
-  });
-}
 
 // ---------- Booking Email Logic ----------
 async function sendBookingEmails(name, email, phone, room, guests, checkIn, checkOut) {
