@@ -133,7 +133,7 @@ async function sendContactEmails(name, email, message) {
 }
 
 // ---------- Booking Email Logic ----------
-async function sendBookingEmails(name, email, phone, room, checkIn, checkOut, guests) {
+async function sendBookingEmails(name, email, phone, room, guests, checkIn, checkOut) {
   const from = process.env.EMAIL_FROM || process.env.ADMIN_EMAIL;
   const admin = process.env.ADMIN_EMAIL;
 
