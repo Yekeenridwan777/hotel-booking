@@ -11,7 +11,7 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// Basic routes
+// ---------- Basic Routes ----------
 app.get("/", (req, res) => res.send("Hotel Booking API is running..."));
 app.get("/api/test", (req, res) => res.json({ status: "success", message: "Test route is working!" }));
 
@@ -29,6 +29,7 @@ db.serialize(() => {
     message TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
+
   db.run(`CREATE TABLE IF NOT EXISTS bookings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT,
@@ -42,7 +43,7 @@ db.serialize(() => {
   )`);
 });
 
-// Promise wrapper for db.run / db.get / db.all
+// ---------- Promise Wrappers ----------
 function dbRun(sql, params = []) {
   return new Promise((resolve, reject) => {
     db.run(sql, params, function (err) {
@@ -51,6 +52,7 @@ function dbRun(sql, params = []) {
     });
   });
 }
+
 function dbAll(sql, params = []) {
   return new Promise((resolve, reject) => {
     db.all(sql, params, (err, rows) => {
@@ -59,6 +61,7 @@ function dbAll(sql, params = []) {
     });
   });
 }
+
 function dbGet(sql, params = []) {
   return new Promise((resolve, reject) => {
     db.get(sql, params, (err, row) => {
@@ -68,77 +71,105 @@ function dbGet(sql, params = []) {
   });
 }
 
-// ---------- Brevo setup ----------
+// ---------- Brevo Setup ----------
 const brevoClient = new Brevo.TransactionalEmailsApi();
+
 if (!process.env.BREVO_API_KEY) {
   console.warn("⚠️ BREVO_API_KEY is not set. Emails will fail.");
 } else {
   brevoClient.setApiKey(Brevo.TransactionalEmailsApiApiKeys.apiKey, process.env.BREVO_API_KEY);
 }
 
-// Helper: send transactional email via Brevo
+// ---------- Email Sender Helper ----------
 async function sendTransacEmail({ fromEmail, toEmails = [], subject = "", htmlContent = "", textContent = "" }) {
-  if (!brevoClient || !process.env.BREVO_API_KEY) {
-    throw new Error("Brevo client not configured (BREVO_API_KEY missing)");
+  if (!process.env.BREVO_API_KEY) {
+    throw new Error("Brevo client not configured (missing BREVO_API_KEY)");
   }
 
-  // build payload
   const payload = {
     sender: { email: fromEmail },
-    to: toEmails.map(e => ({ email: e })),
+    to: toEmails.map(email => ({ email })),
     subject,
   };
+
   if (htmlContent) payload.htmlContent = htmlContent;
   if (textContent) payload.textContent = textContent;
 
-  // call Brevo API
   return brevoClient.sendTransacEmail(payload);
 }
 
-// ---------- Email helpers ----------
+// ---------- Contact Email Logic ----------
 async function sendContactEmails(name, email, message) {
   const from = process.env.EMAIL_FROM || process.env.ADMIN_EMAIL;
   const admin = process.env.ADMIN_EMAIL;
-  // admin copy
+
+  // Notify admin
   await sendTransacEmail({
     fromEmail: from,
     toEmails: [admin],
     subject: `New Contact from ${name}`,
     textContent: `Name: ${name}\nEmail: ${email}\nMessage:\n${message}`,
-    htmlContent: `<p><strong>Name:</strong> ${name}</p><p><strong>Email:</strong> ${email}</p><p><strong>Message:</strong><br/>${message}</p>`
+    htmlContent: `
+      <p><strong>Name:</strong> ${name}</p>
+      <p><strong>Email:</strong> ${email}</p>
+      <p><strong>Message:</strong><br/>${message}</p>
+    `,
   });
 
-  // auto-reply to sender
+  // Auto reply to sender
   await sendTransacEmail({
     fromEmail: from,
     toEmails: [email],
     subject: `Thanks for contacting ${process.env.HOTEL_NAME || "Minister of Enjoyment Hotel"}`,
     textContent: `Hi ${name},\n\nThanks for reaching out. We received your message and will get back to you shortly.\n\n— ${process.env.HOTEL_NAME || "Minister of Enjoyment Hotel"}`,
-    htmlContent: `<div style="font-family:Arial,sans-serif"><h3>Hi ${name},</h3><p>Thanks for reaching out. We received your message and will get back to you shortly.</p><p>— ${process.env.HOTEL_NAME || "Minister of Enjoyment Hotel"}</p></div>`
+    htmlContent: `
+      <div style="font-family:Arial,sans-serif">
+        <h3>Hi ${name},</h3>
+        <p>Thanks for reaching out. We received your message and will get back to you shortly.</p>
+        <p>— ${process.env.HOTEL_NAME || "Minister of Enjoyment Hotel"}</p>
+      </div>
+    `,
   });
 }
 
-async function sendBookingEmails(name, email, room, checkIn, checkOut, guests) {
+// ---------- Booking Email Logic ----------
+async function sendBookingEmails(name, email, phone, room, checkIn, checkOut, guests) {
   const from = process.env.EMAIL_FROM || process.env.ADMIN_EMAIL;
   const admin = process.env.ADMIN_EMAIL;
-  // admin notification
+
+  // Notify admin
   await sendTransacEmail({
     fromEmail: from,
     toEmails: [admin],
     subject: `New Booking Received from ${name}`,
     textContent: `New booking\nName: ${name}\nEmail: ${email}\nPhone: ${phone || "N/A"}\nRoom: ${room}\nGuests: ${guests}\nCheck-in: ${checkIn}\nCheck-out: ${checkOut}`,
-    htmlContent: `<p><strong>Name:</strong> ${name}</p><p><strong>Email:</strong> ${email}</p><p><strong>Room:</strong> ${room}</p><p><strong>Guests:</strong> ${guests}</p><p><strong>Check-in:</strong> ${checkIn}</p><p><strong>Check-out:</strong> ${checkOut}</p>`
+    htmlContent: `
+      <p><strong>Name:</strong> ${name}</p>
+      <p><strong>Email:</strong> ${email}</p>
+      <p><strong>Phone:</strong> ${phone || "N/A"}</p>
+      <p><strong>Room:</strong> ${room}</p>
+      <p><strong>Guests:</strong> ${guests}</p>
+      <p><strong>Check-in:</strong> ${checkIn}</p>
+      <p><strong>Check-out:</strong> ${checkOut}</p>
+    `,
   });
 
-  // guest confirmation
+  // Confirmation email to guest
   await sendTransacEmail({
     fromEmail: from,
     toEmails: [email],
     subject: `Booking Received — ${process.env.HOTEL_NAME || "Minister of Enjoyment Hotel"}`,
     textContent: `Hello ${name},\n\nWe received your booking for ${room} from ${checkIn} to ${checkOut}. We'll confirm shortly.\n\nThanks,\n${process.env.HOTEL_NAME || "Minister of Enjoyment Hotel"}`,
-    htmlContent: `<div style="font-family:Arial,sans-serif"><h3>Hello ${name},</h3><p>We received your booking for <strong>${room}</strong> from <strong>${checkIn}</strong> to <strong>${checkOut}</strong>. We'll confirm shortly.</p><p>Thanks,<br/>${process.env.HOTEL_NAME || "Minister of Enjoyment Hotel"}</p></div>`
+    htmlContent: `
+      <div style="font-family:Arial,sans-serif">
+        <h3>Hello ${name},</h3>
+        <p>We received your booking for <strong>${room}</strong> from <strong>${checkIn}</strong> to <strong>${checkOut}</strong>. We'll confirm shortly.</p>
+        <p>Thanks,<br/>${process.env.HOTEL_NAME || "Minister of Enjoyment Hotel"}</p>
+      </div>
+    `,
   });
 }
+
 
 // ---------- PUBLIC ROUTES ----------
 
