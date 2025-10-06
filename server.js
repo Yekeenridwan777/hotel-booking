@@ -300,8 +300,8 @@ app.get("/admin/login", (req, res) => {
 app.post("/admin/login", (req, res) => {
   const { username, password } = req.body || {};
   // Set credentials via environment if you like, otherwise default below:
-  const ADMIN_USER = process.env.ADMIN_USER || "admin";
-  const ADMIN_PASS = process.env.ADMIN_PASS || "12345";
+  const ADMIN_USER = process.env.ADMIN_USER || "Minista of enjoyment";
+  const ADMIN_PASS = process.env.ADMIN_PASS || "6776";
 
   if (username === ADMIN_USER && password === ADMIN_PASS) {
     isLoggedIn = true;
@@ -498,6 +498,87 @@ app.post("/admin/contacts/edit/:id", requireLogin, (req, res) => {
     if (err) return res.status(500).send("Error updating contact");
     res.redirect("/admin/contacts");
   });
+});
+// ---------- Room Booking Status Feature ----------
+
+// Ensure 'status' column exists in bookings table
+db.run(`ALTER TABLE bookings ADD COLUMN status TEXT DEFAULT 'available'`, (err) => {
+  if (err && !err.message.includes("duplicate column")) {
+    console.error("⚠️ Couldn't add status column:", err.message);
+  }
+});
+
+// Show status column in admin bookings page
+app.get("/admin/bookings", requireLogin, async (req, res) => {
+  try {
+    const rows = await dbAll("SELECT * FROM bookings ORDER BY created_at DESC");
+    const rowsHtml = rows
+      .map(
+        (r) => `
+      <tr>
+        <td>${r.id}</td>
+        <td>${r.name}</td>
+        <td>${r.email}</td>
+        <td>${r.phone}</td>
+        <td>${r.room}</td>
+        <td>${r.guests}</td>
+        <td>${r.check_in}</td>
+        <td>${r.check_out}</td>
+        <td>${r.status || "available"}</td>
+        <td>${r.created_at}</td>
+        <td>
+          <form method="POST" action="/admin/bookings/toggle/${r.id}" style="display:inline;">
+            <button type="submit" class="btn btn-sm ${
+              r.status === "booked" ? "btn-secondary" : "btn-success"
+            }">${r.status === "booked" ? "Mark Available" : "Mark Booked"}</button>
+          </form>
+          <form method="POST" action="/admin/bookings/delete/${r.id}" style="display:inline;" onsubmit="return confirm('Delete this booking?');">
+            <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+          </form>
+          <form method="GET" action="/admin/bookings/edit/${r.id}" style="display:inline;">
+            <button type="submit" class="btn btn-sm btn-warning">Edit</button>
+          </form>
+        </td>
+      </tr>`
+      )
+      .join("");
+    res.send(
+      renderPage(
+        "Bookings",
+        "📑 All Bookings",
+        ["ID","Name","Email","Phone","Room","Guests","Check-in","Check-out","Status","Created","Actions"],
+        rowsHtml
+      )
+    );
+  } catch (err) {
+    console.error("❌ Admin bookings error:", err);
+    res.status(500).send("Error loading bookings");
+  }
+});
+
+// Toggle booking status
+app.post("/admin/bookings/toggle/:id", requireLogin, async (req, res) => {
+  try {
+    const booking = await dbGet("SELECT status FROM bookings WHERE id = ?", [req.params.id]);
+    if (!booking) return res.status(404).send("Booking not found");
+    const newStatus = booking.status === "booked" ? "available" : "booked";
+    await dbRun("UPDATE bookings SET status = ? WHERE id = ?", [newStatus, req.params.id]);
+    console.log(`✅ Booking ID ${req.params.id} marked as ${newStatus}`);
+    res.redirect("/admin/bookings");
+  } catch (err) {
+    console.error("❌ Toggle booking status error:", err);
+    res.status(500).send("Error toggling status");
+  }
+});
+
+// API endpoint to get current room status (for frontend)
+app.get("/api/rooms/status", async (req, res) => {
+  try {
+    const rooms = await dbAll("SELECT room, status FROM bookings");
+    res.json({ success: true, rooms });
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Error fetching room status" });
+  }
 });
 
 // ---------- Start server ----------
