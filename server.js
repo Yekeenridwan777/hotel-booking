@@ -617,11 +617,12 @@ app.post("/admin/bookings/toggle/:id", requireLogin, async (req, res) => {
 // API endpoint to get current room status (for frontend)
 app.get("/api/rooms/status", async (req, res) => {
   try {
-    const rooms = await dbAll("SELECT room, status FROM bookings");
+    const rooms = await dbAll("SELECT id, room, status FROM rooms");
     res.json({ success: true, rooms });
   } catch (err) {
-    res.status(500).json({ success: false, message: "Error fetching room status" });
-  }
+    console.error("Error fetching room status:", err);
+    res.status(500).json({ success: false, message: "Error fetching room status" });
+  }
 });
 // ---------- ADMIN: Room Management ----------
 app.get("/admin/rooms", requireLogin, async (req, res) => {
