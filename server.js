@@ -16,44 +16,63 @@ app.get("/", (req, res) => res.send("Hotel Booking API is running..."));
 app.get("/api/test", (req, res) => res.json({ status: "success", message: "Test route is working!" }));
 
 // ---------- Database ----------
+// DATABASE CONNECTION
 const db = new sqlite3.Database("./hotel.db", (err) => {
-  if (err) console.error("❌ Database error:", err.message);
-  else console.log("✅ Connected to SQLite database");
+  if (err) {
+    console.error("❌ Database error:", err.message);
+  } else {
+    console.log("✅ Connected to SQLite database");
+  }
 });
 
-
+// CREATE TABLES
 db.serialize(() => {
-  db.run(`CREATE TABLE IF NOT EXISTS contacts (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT,
-    email TEXT,
-    message TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`);
+  // Contact messages
+  db.run(`
+    CREATE TABLE IF NOT EXISTS contacts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT,
+      email TEXT,
+      message TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
 
-  db.run(`CREATE TABLE IF NOT EXISTS bookings (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT,
-    email TEXT,
-    phone TEXT,
-    room TEXT,
-    guests INTEGER,
-    check_in TEXT,
-    check_out TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`);
-});
-// Create rooms table to track manual booking status
-db.run(`CREATE TABLE IF NOT EXISTS rooms (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  room TEXT UNIQUE,
-  status TEXT DEFAULT 'available'
-)`);
+  // Room bookings
+  db.run(`
+    CREATE TABLE IF NOT EXISTS bookings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT,
+      email TEXT,
+      phone TEXT,
+      room TEXT,
+      guests INTEGER,
+      check_in TEXT,
+      check_out TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
 
-// Initialize 5 default rooms if not already created
-const defaultRooms = ["Room 1", "Room 2", "Room 3", "Room 4", "Room 5"];
-defaultRooms.forEach(room => {
-  db.run(`INSERT OR IGNORE INTO rooms (name, status) VALUES (?, 'available')`, [room]);
+  // Manual room status tracking
+  db.run(`
+    CREATE TABLE IF NOT EXISTS rooms (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT UNIQUE,
+      status TEXT DEFAULT 'available'
+    )
+  `);
+
+  // Initialize rooms 1–5
+  const defaultRooms = ["Room 1", "Room 2", "Room 3", "Room 4", "Room 5"];
+  defaultRooms.forEach((room) => {
+    db.run(
+      `INSERT OR IGNORE INTO rooms (name, status) VALUES (?, 'available')`,
+      [room],
+      (err) => {
+        if (err) console.error("Room insert error:", err.message);
+      }
+    );
+  });
 });
 
 
