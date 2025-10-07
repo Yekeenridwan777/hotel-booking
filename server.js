@@ -664,13 +664,19 @@ app.post("/admin/rooms/toggle/:id", requireLogin, async (req, res) => {
 });
 
 // API endpoint for frontend to check booked rooms
-app.get("/api/rooms/status", async (req, res) => {
-  try {
-    const rooms = await dbAll("SELECT name, status FROM rooms");
-    res.json({ success: true, rooms });
-  } catch (err) {
-    res.status(500).json({ success: false, message: "Error fetching room status" });
-  }
+// ✅ Get all room statuses
+app.get("/api/rooms/status", (req, res) => {
+  db.all("SELECT name, status FROM rooms", (err, rows) => {
+    if (err) {
+      console.error("❌ Error fetching room status:", err.message);
+      return res.json({ success: false });
+    }
+
+    // Log data for debugging
+    console.log("📡 Room status data:", rows);
+
+    res.json({ success: true, rooms: rows });
+  });
 });
 
 // ---------- Start server ----------
