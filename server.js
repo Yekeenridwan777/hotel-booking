@@ -43,37 +43,10 @@ db.serialize(() => {
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 });
-const db = new sqlite3.Database("./hotel.db", (err) => {
-  if (err) console.error("❌ Database error:", err.message);
-  else console.log("✅ Connected to SQLite database");
-});
-
-
-db.serialize(() => {
-  db.run(`CREATE TABLE IF NOT EXISTS contacts (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT,
-    email TEXT,
-    message TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`);
-
-  db.run(`CREATE TABLE IF NOT EXISTS bookings (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT,
-    email TEXT,
-    phone TEXT,
-    room TEXT,
-    guests INTEGER,
-    check_in TEXT,
-    check_out TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`);
-});
 // Create rooms table to track manual booking status
 db.run(`CREATE TABLE IF NOT EXISTS rooms (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT UNIQUE,
+  room TEXT UNIQUE,
   status TEXT DEFAULT 'available'
 )`);
 
