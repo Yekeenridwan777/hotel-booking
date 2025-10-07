@@ -196,6 +196,7 @@ Check-out: ${checkOut}`,
         <h3>New Booking Received</h3>
         <p><strong>Name:</strong> ${name}</p>
         <p><strong>Email:</strong> ${email}</p>
+
         <p><strong>Phone:</strong> ${phone}</p>
         <p><strong>Room:</strong> ${room}</p>
         <p><strong>Guests:</strong> ${guests}</p>
@@ -591,17 +592,25 @@ app.get("/admin/bookings", requireLogin, async (req, res) => {
 });
 
 // Toggle booking status
+// Toggle booking status + sync with rooms table
 app.post("/admin/bookings/toggle/:id", requireLogin, async (req, res) => {
   try {
-    const booking = await dbGet("SELECT status FROM bookings WHERE id = ?", [req.params.id]);
+    const booking = await dbGet("SELECT status, room FROM bookings WHERE id = ?", [req.params.id]);
     if (!booking) return res.status(404).send("Booking not found");
+
     const newStatus = booking.status === "booked" ? "available" : "booked";
+
+    // Update the booking itself
     await dbRun("UPDATE bookings SET status = ? WHERE id = ?", [newStatus, req.params.id]);
-    console.log(`✅ Booking ID ${req.params.id} marked as ${newStatus}`);
+
+    // Also update the room table so frontend reflects the same status
+    await dbRun("UPDATE rooms SET status = ? WHERE name = ?", [newStatus, booking.room]);
+
+    console.log('✅ Booking ID ${req.params.id} marked as ${newStatus}');
     res.redirect("/admin/bookings");
   } catch (err) {
-    console.error("❌ Toggle booking status error:", err);
-    res.status(500).send("Error toggling status");
+    console.error("❌ Toggle booking status sync error:", err);
+    res.status(500).send("Error toggling booking status");
   }
 });
 
