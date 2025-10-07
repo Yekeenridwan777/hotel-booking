@@ -42,6 +42,18 @@ db.serialize(() => {
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 });
+// Create rooms table to track manual booking status
+db.run(`CREATE TABLE IF NOT EXISTS rooms (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT UNIQUE,
+  status TEXT DEFAULT 'available'
+)`);
+
+// Initialize 5 default rooms if not already created
+const defaultRooms = ["Room 1", "Room 2", "Room 3", "Room 4", "Room 5"];
+defaultRooms.forEach(room => {
+  db.run(`INSERT OR IGNORE INTO rooms (name, status) VALUES (?, 'available')`, [room]);
+});
 
 // ---------- Promise Wrappers ----------
 function dbRun(sql, params = []) {
@@ -123,12 +135,12 @@ async function sendContactEmails(name, email, message) {
     await sendTransacEmail({
       fromEmail: from,
       toEmails: [email],
-      subject: `Thanks for contacting ${process.env.HOTEL_NAME || "Minister of Enjoyment Hotel"}`,
+      subject: `Thanks for contacting ${process.env.HOTEL_NAME || "Minista of Enjoyment Hotel"}`,
       htmlContent: `
         <div style="font-family:Arial,sans-serif">
           <h3>Hi ${name},</h3>
           <p>We’ve received your message and will respond as soon as possible.</p>
-          <p>— ${process.env.HOTEL_NAME || "Minister of Enjoyment Hotel"}</p>
+          <p>— ${process.env.HOTEL_NAME || "Minista of Enjoyment Hotel"}</p>
         </div>
       `
     });
@@ -175,10 +187,10 @@ Check-out: ${checkOut}`,
   await sendTransacEmail({
     fromEmail: from,
     toEmails: [email],
-    subject: `Booking Confirmation — ${process.env.HOTEL_NAME || "Minister of Enjoyment Hotel"}`,
+    subject: `Booking Confirmation — ${process.env.HOTEL_NAME || "Minista of Enjoyment Hotel"}`,
     textContent: `Hello ${name},
 
-Thank you for booking with ${process.env.HOTEL_NAME || "Minister of Enjoyment Hotel"}.
+Thank you for booking with ${process.env.HOTEL_NAME || "Minista of Enjoyment Hotel"}.
 Here are your booking details:
 
 Room: ${room}
@@ -188,11 +200,11 @@ Check-out: ${checkOut}
 
 We look forward to your stay!
 
-— ${process.env.HOTEL_NAME || "Minister of Enjoyment Hotel"}`,
+— ${process.env.HOTEL_NAME || "Minista of Enjoyment Hotel"}`,
     htmlContent: `
       <div style="font-family:Arial,sans-serif">
         <h3>Hello ${name},</h3>
-        <p>Thank you for booking with <strong>${process.env.HOTEL_NAME || "Minister of Enjoyment Hotel"}</strong>.</p>
+        <p>Thank you for booking with <strong>${process.env.HOTEL_NAME || "Minista of Enjoyment Hotel"}</strong>.</p>
         <p>Here are your booking details:</p>
         <ul>
           <li><strong>Room:</strong> ${room}</li>
@@ -330,6 +342,7 @@ function renderPage(title, heading, headers, rows) {
       <body class="container py-4">
         <nav class="mb-4">
           <a href="/admin/bookings" class="btn btn-primary me-2">📑 Bookings</a>
+          <a href="/admin/rooms" class="btn btn-success me-2">🏨 Rooms</a>
           <a href="/admin/contacts" class="btn btn-info me-2">📧 Contacts</a>
           <a href="/admin/logout" class="btn btn-danger">🚪 Logout</a>
         </nav>
@@ -575,6 +588,55 @@ app.post("/admin/bookings/toggle/:id", requireLogin, async (req, res) => {
 app.get("/api/rooms/status", async (req, res) => {
   try {
     const rooms = await dbAll("SELECT room, status FROM bookings");
+    res.json({ success: true, rooms });
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Error fetching room status" });
+  }
+});
+// ---------- ADMIN: Room Management ----------
+app.get("/admin/rooms", requireLogin, async (req, res) => {
+  try {
+    const rows = await dbAll("SELECT * FROM rooms ORDER BY id ASC");
+    const rowsHtml = rows.map(r => `
+      <tr>
+        <td>${r.id}</td>
+        <td>${r.name}</td>
+        <td>${r.status}</td>
+        <td>
+          <form method="POST" action="/admin/rooms/toggle/${r.id}" style="display:inline;">
+            <button type="submit" class="btn btn-sm ${r.status === 'booked' ? 'btn-secondary' : 'btn-success'}">
+              ${r.status === 'booked' ? 'Mark Available' : 'Mark Booked'}
+            </button>
+          </form>
+        </td>
+      </tr>`).join("");
+
+    res.send(renderPage("Rooms", "🏨 Manage Rooms", ["ID", "Room Name", "Status", "Actions"], rowsHtml));
+  } catch (err) {
+    console.error("❌ Admin rooms error:", err);
+    res.status(500).send("Error loading rooms");
+  }
+});
+
+// Toggle room status
+app.post("/admin/rooms/toggle/:id", requireLogin, async (req, res) => {
+  try {
+    const room = await dbGet("SELECT status FROM rooms WHERE id = ?", [req.params.id]);
+    if (!room) return res.status(404).send("Room not found");
+    const newStatus = room.status === "booked" ? "available" : "booked";
+    await dbRun("UPDATE rooms SET status = ? WHERE id = ?", [newStatus, req.params.id]);
+    console.log(`✅ Room ID ${req.params.id} marked as ${newStatus}`);
+    res.redirect("/admin/rooms");
+  } catch (err) {
+    console.error("❌ Toggle room status error:", err);
+    res.status(500).send("Error toggling room status");
+  }
+});
+
+// API endpoint for frontend to check booked rooms
+app.get("/api/rooms/status", async (req, res) => {
+  try {
+    const rooms = await dbAll("SELECT name, status FROM rooms");
     res.json({ success: true, rooms });
   } catch (err) {
     res.status(500).json({ success: false, message: "Error fetching room status" });
