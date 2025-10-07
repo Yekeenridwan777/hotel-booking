@@ -21,6 +21,34 @@ const db = new sqlite3.Database("./hotel.db", (err) => {
   else console.log("✅ Connected to SQLite database");
 });
 
+
+db.serialize(() => {
+  db.run(`CREATE TABLE IF NOT EXISTS contacts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT,
+    email TEXT,
+    message TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS bookings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT,
+    email TEXT,
+    phone TEXT,
+    room TEXT,
+    guests INTEGER,
+    check_in TEXT,
+    check_out TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+});
+const db = new sqlite3.Database("./hotel.db", (err) => {
+  if (err) console.error("❌ Database error:", err.message);
+  else console.log("✅ Connected to SQLite database");
+});
+
+
 db.serialize(() => {
   db.run(`CREATE TABLE IF NOT EXISTS contacts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -54,6 +82,7 @@ const defaultRooms = ["Room 1", "Room 2", "Room 3", "Room 4", "Room 5"];
 defaultRooms.forEach(room => {
   db.run(`INSERT OR IGNORE INTO rooms (name, status) VALUES (?, 'available')`, [room]);
 });
+
 
 // ---------- Promise Wrappers ----------
 function dbRun(sql, params = []) {
