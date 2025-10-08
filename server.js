@@ -68,6 +68,7 @@ db.serialize(() => {
     email TEXT,
     phone TEXT,
     tableType TEXT,
+    guest INTEGER,
     date TEXT,
     time TEXT,
     message TEXT
@@ -319,18 +320,18 @@ app.post("/book", async (req, res) => {
 // ---------- Lounge Booking Route ----------
 // Lounge booking endpoint (replace your current /lounge handler with this)
 app.post("/lounge", async (req, res) => {
-  const { name, email, phone, tableType, date, time, message } = req.body;
+  const { name, email, phone, tableType, LoungeGuest, date, time, message } = req.body;
 
-  if (!name || !email || !phone || !tableType || !date || !time) {
+  if (!name || !email || !phone || !tableType || !LoungeGuest || !date || !time) {
     return res.json({ success: false, message: "All required fields must be filled." });
   }
 
   try {
     // Save to database
     await dbRun(
-      `INSERT INTO lounge_bookings (name, email, phone, tableType, date, time, message)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [name, email, phone, tableType, date, time, message]
+      `INSERT INTO lounge_bookings (name, email, phone, LoungeGuest, tableType, date, time, message)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [name, email, phone, tableType, LoungeGuest, date, time, message]
     );
 
     // --- ADMIN EMAIL (via Brevo helper) ---
@@ -348,11 +349,12 @@ app.post("/lounge", async (req, res) => {
         <p><strong>Email:</strong> ${email}</p>
         <p><strong>Phone:</strong> ${phone}</p>
         <p><strong>Booking Type:</strong> ${tableType}</p>
+        <p><strong>Guest Number:</strong> ${LoungeGuest}</p>
         <p><strong>Date:</strong> ${date}</p>
         <p><strong>Time:</strong> ${time}</p>
         <p><strong>Message:</strong> ${message || "No message provided"}</p>
       `,
-      textContent: `Lounge booking: ${tableType} - ${name} - ${email} - ${phone} - ${date} ${time}`
+      textContent: `Lounge booking: ${tableType} - ${name} - ${email} - ${phone} - ${LoungeGuest} - ${date} ${time}`
     });
 
     // --- AUTO REPLY TO CLIENT ---
@@ -364,7 +366,7 @@ app.post("/lounge", async (req, res) => {
         <h3>Hi ${name},</h3>
         <p>We’ve received your lounge booking request for <strong>${tableType}</strong> on <strong>${date}</strong> at <strong>${time}</strong>.</p>
         <p>Our team will contact you shortly  to confirm your reservation.</p>
-        <p>— ${process.env.HOTEL_NAME || "Minista of Enjoyment Hotel"}</p>
+        <p>— ${process.env.HOTEL_NAME || "Minista of Enjoyment Lounge and Suite"}</p>
       `,
       textContent: `Hi ${name}, we received your lounge booking for ${tableType} on ${date} at ${time}. We'll contact you to confirm.`
     });
