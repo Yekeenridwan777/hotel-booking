@@ -317,7 +317,6 @@ app.post("/book", async (req, res) => {
   }
 });
 // ---------- Lounge Booking Route ----------
-import Brevo from "@getbrevo/brevo"; // make sure this import or require exists at the top if using ES modules
 
 app.post("/lounge", async (req, res) => {
   const { name, email, phone, eventType, guests, date, message } = req.body;
@@ -330,7 +329,7 @@ app.post("/lounge", async (req, res) => {
     await client.sendTransacEmail({
       sender: { email: "no-reply@yourdomain.com", name: "Hotel Lounge Booking" },
       to: [{ email: process.env.ADMIN_EMAIL, name: "Admin" }],
-      subject: New Lounge Booking Request from ${name},
+      subject: 'New Lounge Booking Request from ${name}',
       htmlContent: `
         <h3>New Lounge Booking</h3>
         <p><b>Name:</b> ${name}</p>
@@ -355,7 +354,7 @@ app.post("/lounge", async (req, res) => {
       `,
     });
 
-    console.log(✅ Lounge booking email sent for ${name});
+    console.log('✅ Lounge booking email sent for ${name}');
     res.json({ success: true, message: "Booking request sent successfully!" });
   } catch (error) {
     console.error("❌ Lounge booking failed:", error);
