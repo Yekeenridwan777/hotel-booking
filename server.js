@@ -617,7 +617,7 @@ app.post("/admin/bookings/toggle/:id", requireLogin, async (req, res) => {
 // API endpoint to get current room status (for frontend)
 app.get("/api/rooms/status", async (req, res) => {
   try {
-    const rooms = await dbAll("SELECT id, name AS room, status FROM rooms");
+    const rooms = await dbAll("SELECT name, status FROM rooms");
     res.json({ success: true, rooms });
   } catch (err) {
     console.error("Error fetching room status:", err);
