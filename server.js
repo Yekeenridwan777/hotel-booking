@@ -329,7 +329,7 @@ app.post("/lounge", async (req, res) => {
   try {
     // Save to database
     await dbRun(
-      `INSERT INTO lounge_bookings (name, email, phone, guests, tableType, date, time, message)
+      `INSERT INTO lounge_bookings (name, email, phone, LoungeGuest, tableType, date, time, message)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [name, email, phone, tableType, LoungeGuest, date, time, message]
     );
