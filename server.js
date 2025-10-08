@@ -317,50 +317,66 @@ app.post("/book", async (req, res) => {
   }
 });
 // ---------- Lounge Booking Route ----------
-
+// Lounge booking endpoint (replace your current /lounge handler with this)
 app.post("/lounge", async (req, res) => {
-  const { name, email, phone, eventType, guests, date, message } = req.body;
+  const { name, email, phone, tableType, date, time, message } = req.body;
+
+  if (!name || !email || !phone || !tableType || !date || !time) {
+    return res.json({ success: false, message: "All required fields must be filled." });
+  }
 
   try {
-    const client = new Brevo.TransactionalEmailsApi();
-    client.authentications["apiKey"].apiKey = process.env.BREVO_API_KEY;
+    // Save to database
+    await dbRun(
+      `INSERT INTO lounge_bookings (name, email, phone, tableType, date, time, message)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [name, email, phone, tableType, date, time, message]
+    );
 
-    // 1️⃣ Admin Notification (exact same format)
-    await client.sendTransacEmail({
-      sender: { email: "no-reply@yourdomain.com", name: "Hotel Lounge Booking" },
-      to: [{ email: process.env.ADMIN_EMAIL, name: "Admin" }],
-      subject: 'New Lounge Booking Request from ${name}',
+    // --- ADMIN EMAIL (via Brevo helper) ---
+    const from = process.env.EMAIL_FROM || process.env.ADMIN_EMAIL;
+    const admin = process.env.ADMIN_EMAIL;
+
+    // Admin notification
+    await sendTransacEmail({
+      fromEmail: from,
+      toEmails: [admin],
+      subject: `🎉 New Lounge Booking: ${tableType}`,
       htmlContent: `
-        <h3>New Lounge Booking</h3>
-        <p><b>Name:</b> ${name}</p>
-        <p><b>Email:</b> ${email}</p>
-        <p><b>Phone:</b> ${phone}</p>
-        <p><b>Event Type:</b> ${eventType}</p>
-        <p><b>Guests:</b> ${guests}</p>
-        <p><b>Date:</b> ${date}</p>
-        <p><b>Message:</b> ${message}</p>
+        <h2>New Lounge Booking</h2>
+        <p><strong>Name:</strong> ${name}</p>
+        <p><strong>Email:</strong> ${email}</p>
+        <p><strong>Phone:</strong> ${phone}</p>
+        <p><strong>Booking Type:</strong> ${tableType}</p>
+        <p><strong>Date:</strong> ${date}</p>
+        <p><strong>Time:</strong> ${time}</p>
+        <p><strong>Message:</strong> ${message || "No message provided"}</p>
       `,
+      textContent: `Lounge booking: ${tableType} - ${name} - ${email} - ${phone} - ${date} ${time}`
     });
 
-    // 2️⃣ Auto Reply (same tone and design)
-    await client.sendTransacEmail({
-      sender: { email: "no-reply@yourdomain.com", name: "Hotel Lounge Booking" },
-      to: [{ email, name }],
-      subject: "Lounge Booking Request Received",
+    // --- AUTO REPLY TO CLIENT ---
+    await sendTransacEmail({
+      fromEmail: from,
+      toEmails: [email],
+      subject: `🍸 Lounge Booking Confirmation — ${process.env.HOTEL_NAME || "Minista of Enjoyment Hotel"}`,
       htmlContent: `
-        <p>Dear ${name},</p>
-        <p>Thank you for your interest in our lounge. We’ve received your booking request for <b>${eventType}</b> on <b>${date}</b>. Our events team will contact you shortly to confirm your reservation.</p>
-        <p>Kind regards,<br>The Hotel Lounge Team</p>
+        <h3>Hi ${name},</h3>
+        <p>We’ve received your lounge booking request for <strong>${tableType}</strong> on <strong>${date}</strong> at <strong>${time}</strong>.</p>
+        <p>Our team will contact you shortly  to confirm your reservation.</p>
+        <p>— ${process.env.HOTEL_NAME || "Minista of Enjoyment Hotel"}</p>
       `,
+      textContent: `Hi ${name}, we received your lounge booking for ${tableType} on ${date} at ${time}. We'll contact you to confirm.`
     });
 
-    console.log('✅ Lounge booking email sent for ${name}');
-    res.json({ success: true, message: "Booking request sent successfully!" });
-  } catch (error) {
-    console.error("❌ Lounge booking failed:", error);
-    res.status(500).json({ success: false, message: "Could not send booking request" });
+    console.log(`✅ Lounge booking saved for ${name} (${tableType} on ${date} ${time})`);
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("❌ Error saving lounge booking:", err && err.message ? err.message : err);
+    return res.json({ success: false, message: "Server error" });
   }
 });
+
 
 // ---------- ADMIN (simple) ----------
 let isLoggedIn = false;
