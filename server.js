@@ -328,11 +328,11 @@ app.post("/lounge", async (req, res) => {
 
   try {
     // Save to database
-    //await dbRun(
-     // `INSERT INTO lounge_bookings (name, email, phone, LoungeGuest, tableType, date, time, message)
-      // VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-     // [name, email, phone, tableType, LoungeGuest, date, time, message]
-    //);
+    await dbRun(
+      `INSERT INTO lounge_bookings (name, email, phone, LoungeGuest, tableType, date, time, message)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [name, email, phone, tableType, LoungeGuest, date, time, message]
+    );
 
     // --- ADMIN EMAIL (via Brevo helper) ---
     const from = process.env.EMAIL_FROM || process.env.ADMIN_EMAIL;
