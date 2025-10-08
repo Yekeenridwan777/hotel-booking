@@ -61,6 +61,18 @@ db.serialize(() => {
       status TEXT DEFAULT 'available'
     )
   `);
+  db.run(`
+  CREATE TABLE IF NOT EXISTS lounge_bookings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT,
+    email TEXT,
+    phone TEXT,
+    tableType TEXT,
+    date TEXT,
+    time TEXT,
+    message TEXT
+  )
+`);
 
   // Initialize rooms 1–5
   const defaultRooms = ["Room 1", "Room 2", "Room 3", "Room 4", "Room 5"];
@@ -302,6 +314,64 @@ app.post("/book", async (req, res) => {
   } catch (err) {
     console.error("❌ /book error:", err);
     return res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+app.post("/lounge", async (req, res) => {
+  const { name, email, phone, tableType, date, time, message } = req.body;
+
+  if (!name || !email || !phone || !tableType || !date || !time) {
+    return res.json({ success: false, message: "All required fields must be filled." });
+  }
+
+  try {
+    // Save to database
+    await dbRun(
+      `INSERT INTO lounge_bookings (name, email, phone, tableType, date, time, message)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [name, email, phone, tableType, date, time, message]
+    );
+
+    // --- ADMIN EMAIL ---
+    const adminMail = {
+      from: process.env.ADMIN_EMAIL,
+      to: process.env.ADMIN_EMAIL,
+      subject: '🎉 New Lounge Booking: ${tableType}',
+      html: `
+        <h2>New Lounge Booking</h2>
+        <p><b>Name:</b> ${name}</p>
+        <p><b>Email:</b> ${email}</p>
+        <p><b>Phone:</b> ${phone}</p>
+        <p><b>Booking Type:</b> ${tableType}</p>
+        <p><b>Date:</b> ${date}</p>
+        <p><b>Time:</b> ${time}</p>
+        <p><b>Message:</b> ${message || "No message provided"}</p>
+      `,
+    };
+
+    await transporter.sendMail(adminMail);
+
+    // --- AUTO REPLY TO CLIENT ---
+    const clientMail = {
+      from: process.env.ADMIN_EMAIL,
+      to: email,
+      subject: '🍸 Lounge Booking Confirmation — Minista of Enjoyment Hotel',
+      html: `
+        <h2>Hi ${name},</h2>
+        <p>We’ve received your lounge booking request for <b>${tableType}</b> on <b>${date}</b> at <b>${time}</b>.</p>
+        <p>Our team will contact you shortly to confirm your reservation.</p>
+        <p>Thank you for choosing <b>Minista of Enjoyment Hotel</b>!</p>
+        <br>
+        <p>Warm regards,<br>Minista of Enjoyment Hotel Team</p>
+      `,
+    };
+
+    await transporter.sendMail(clientMail);
+
+    res.json({ success: true });
+
+  } catch (err) {
+    console.error("❌ Error saving lounge booking:", err);
+    res.json({ success: false });
   }
 });
 
