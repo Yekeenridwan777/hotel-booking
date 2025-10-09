@@ -16,14 +16,22 @@ app.get("/", (req, res) => res.send("Hotel Booking API is running..."));
 app.get("/api/test", (req, res) => res.json({ status: "success", message: "Test route is working!" }));
 
 // ---------- Database ----------
-// DATABASE CONNECTION
-const db = new sqlite3.Database("./hotel.db", sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE, (err) => {
-  if (err) console.error("❌ Database connection error:", err.message);
-  else console.log("✅ Connected to SQLite database");
-});
+const path = require("path"); 
 
-// Prevent “database is locked” error
-db.run("PRAGMA busy_timeout = 5000;");
+const db = new sqlite3.Database(
+  path.join(__dirname, "hotel.db"), 
+  sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE,
+  (err) => {
+    if (err) {
+      console.error("❌ Database connection error:", err.message);
+    } else {
+      console.log("✅ Connected to SQLite database");
+    }
+  }
+);
+
+db.run("PRAGMA busy_timeout = 5000;");
+
 
 // CREATE TABLES
 db.serialize(() => {
