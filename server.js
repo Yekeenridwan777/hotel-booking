@@ -19,7 +19,7 @@ app.get("/api/test", (req, res) => res.json({ status: "success", message: "Test 
 const path = require("path"); 
 
 const db = new sqlite3.Database(
-  path.join(__dirname, "hotel.db"), 
+  path.join(__dirname, "hotel.db"),
   sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE,
   (err) => {
     if (err) {
@@ -29,6 +29,7 @@ const db = new sqlite3.Database(
     }
   }
 );
+console.log("📂 Using database file:", require("path").resolve(__dirname, "hotel.db"));
 
 db.run("PRAGMA busy_timeout = 5000;");
 
@@ -76,7 +77,7 @@ db.serialize(() => {
     email TEXT,
     phone TEXT,
     tableType TEXT,
-    guest INTEGER,
+    LoungeGuest INTEGER,
     date TEXT,
     time TEXT,
     message TEXT
@@ -100,9 +101,15 @@ db.serialize(() => {
 // ---------- Promise Wrappers ----------
 function dbRun(sql, params = []) {
   return new Promise((resolve, reject) => {
+    console.log("▶ SQL RUN:", sql, params);
     db.run(sql, params, function (err) {
-      if (err) return reject(err);
-      resolve({ lastID: this.lastID, changes: this.changes });
+      if (err) {
+        console.error("❌ SQL RUN ERROR:", err.message);
+        reject(err);
+      } else {
+        console.log("✅ SQL RUN OK:", { lastID: this.lastID, changes: this.changes });
+        resolve({ lastID: this.lastID, changes: this.changes });
+      }
     });
   });
 }
@@ -271,7 +278,7 @@ app.post("/contact", async (req, res) => {
 
     // Save to DB
     await dbRun(`INSERT INTO contacts (name, email, message) VALUES (?, ?, ?)`, [name, email, message]);
-
+    console.log("🆔 Contact inserted successfully");
     // Attempt to send emails (Brevo)
     try {
       await sendContactEmails(name, email, message);
@@ -305,8 +312,10 @@ app.post("/book", async (req, res) => {
     await dbRun(
       `INSERT INTO bookings (name, email, phone, room, guests, check_in, check_out)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
+
       [name, email, phone, room, guests, checkIn, checkOut]
     );
+    console.log("🆔 Booking inserted successfully");
     console.log(`✅ Booking saved for ${name}`);
 
     // Attempt to send booking emails (Brevo)
@@ -337,7 +346,7 @@ app.post("/lounge", async (req, res) => {
   try {
     // Save to database
     await dbRun(
-      `INSERT INTO lounge_bookings (name, email, phone, LoungeGuest, tableType, date, time, message)
+      `INSERT INTO lounge_bookings (name, email, phone, tableType, LoungeGuest, date, time, message)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [name, email, phone, tableType, LoungeGuest, date, time, message]
     );
@@ -762,7 +771,10 @@ app.get("/api/rooms/status", (req, res) => {
     res.json({ success: true, rooms: rows });
   });
 });
+const fs = require("fs");
 
+console.log("📂 Using database file:", path.resolve("hotel.db"));
+console.log("💾 Database file exists:", fs.existsSync(path.resolve("hotel.db")));
 // ---------- Start server ----------
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Running at http://localhost:${PORT}`));
