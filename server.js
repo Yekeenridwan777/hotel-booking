@@ -3,7 +3,6 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const cors = require("cors");
 require("dotenv").config();
-const sqlite3 = require("sqlite3").verbose();
 const Brevo = require("@getbrevo/brevo"); // Brevo transactional email API
 
 const app = express();
@@ -15,122 +14,100 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.get("/", (req, res) => res.send("Hotel Booking API is running..."));
 app.get("/api/test", (req, res) => res.json({ status: "success", message: "Test route is working!" }));
 
-// ---------- Database ----------
-const path = require("path"); 
+// ---------- Database (PostgreSQL) ----------
+const { Pool } = require("pg");
+const path = require("path");
+const fs = require("fs");
 
-const db = new sqlite3.Database(
-  path.join(__dirname, "hotel.db"),
-  sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE,
-  (err) => {
-    if (err) {
-      console.error("❌ Database connection error:", err.message);
-    } else {
-      console.log("✅ Connected to SQLite database");
-    }
-  }
-);
-console.log("📂 Using database file:", require("path").resolve(__dirname, "hotel.db"));
-
-db.run("PRAGMA busy_timeout = 5000;");
-
-
-// CREATE TABLES
-db.serialize(() => {
-  // Contact messages
-  db.run(`
-    CREATE TABLE IF NOT EXISTS contacts (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT,
-      email TEXT,
-      message TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  // Room bookings
-  db.run(`
-    CREATE TABLE IF NOT EXISTS bookings (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT,
-      email TEXT,
-      phone TEXT,
-      room TEXT,
-      guests INTEGER,
-      check_in TEXT,
-      check_out TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  // Manual room status tracking
-  db.run(`
-    CREATE TABLE IF NOT EXISTS rooms (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT UNIQUE,
-      status TEXT DEFAULT 'available'
-    )
-  `);
-  db.run(`
-  CREATE TABLE IF NOT EXISTS lounge_bookings (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT,
-    email TEXT,
-    phone TEXT,
-    tableType TEXT,
-    LoungeGuest INTEGER,
-    date TEXT,
-    time TEXT,
-    message TEXT
-  )
-`);
-
-  // Initialize rooms 1–5
-  const defaultRooms = ["Room 1", "Room 2", "Room 3", "Room 4", "Room 5"];
-  defaultRooms.forEach((room) => {
-    db.run(
-      `INSERT OR IGNORE INTO rooms (name, status) VALUES (?, 'available')`,
-      [room],
-      (err) => {
-        if (err) console.error("Room insert error:", err.message);
-      }
-    );
-  });
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
 });
 
+console.log("📂 Using DATABASE_URL from env:", !!process.env.DATABASE_URL);
+console.log("⚠️ BREVO_API_KEY is set:", !!process.env.BREVO_API_KEY);
 
-// ---------- Promise Wrappers ----------
-function dbRun(sql, params = []) {
-  return new Promise((resolve, reject) => {
-    console.log("▶ SQL RUN:", sql, params);
-    db.run(sql, params, function (err) {
-      if (err) {
-        console.error("❌ SQL RUN ERROR:", err.message);
-        reject(err);
-      } else {
-        console.log("✅ SQL RUN OK:", { lastID: this.lastID, changes: this.changes });
-        resolve({ lastID: this.lastID, changes: this.changes });
-      }
-    });
-  });
+// Helper wrappers for queries
+async function queryAll(text, params = []) {
+  const r = await pool.query(text, params);
+  return r.rows;
+}
+async function queryOne(text, params = []) {
+  const r = await pool.query(text, params);
+  return r.rows[0] || null;
+}
+async function queryRun(text, params = []) {
+  // returns the full result (for checking rowCount / insert id where applicable)
+  return pool.query(text, params);
 }
 
-function dbAll(sql, params = []) {
-  return new Promise((resolve, reject) => {
-    db.all(sql, params, (err, rows) => {
-      if (err) return reject(err);
-      resolve(rows);
-    });
-  });
-}
+// Initialize tables (similar schema to your earlier SQLite version)
+async function initDB() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS contacts (
+        id SERIAL PRIMARY KEY,
+        name TEXT,
+        email TEXT,
+        message TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
 
-function dbGet(sql, params = []) {
-  return new Promise((resolve, reject) => {
-    db.get(sql, params, (err, row) => {
-      if (err) return reject(err);
-      resolve(row);
-    });
-  });
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS bookings (
+        id SERIAL PRIMARY KEY,
+        name TEXT,
+        email TEXT,
+        phone TEXT,
+        room TEXT,
+        guests INTEGER,
+        check_in TEXT,
+        check_out TEXT,
+        status TEXT DEFAULT 'available',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS rooms (
+        id SERIAL PRIMARY KEY,
+        name TEXT UNIQUE,
+        status TEXT DEFAULT 'available'
+      )
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS lounge_bookings (
+        id SERIAL PRIMARY KEY,
+        name TEXT,
+        email TEXT,
+        phone TEXT,
+        tableType TEXT,
+        LoungeGuest INTEGER,
+        date TEXT,
+        time TEXT,
+        message TEXT,
+        status TEXT DEFAULT 'pending',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Initialize rooms 1–5
+    const defaultRooms = ["Room 1", "Room 2", "Room 3", "Room 4", "Room 5"];
+    for (const room of defaultRooms) {
+      await pool.query(
+        `INSERT INTO rooms (name, status) VALUES ($1, 'available') ON CONFLICT (name) DO NOTHING`,
+        [room]
+      );
+    }
+
+    console.log("✅ PostgreSQL tables ready!");
+  } catch (err) {
+    console.error("❌ DB initialization error:", err);
+  }
 }
+initDB().catch((e) => console.error("initDB failed:", e));
 
 // ---------- Brevo Setup ----------
 const brevoClient = new Brevo.TransactionalEmailsApi();
@@ -195,11 +172,9 @@ async function sendContactEmails(name, email, message) {
     });
     console.log("✅ Auto reply sent to client:", email);
   } catch (err) {
-    console.error("❌ Email error (contact):", err.response?.text || err.message);
+    console.error("❌ Email error (contact):", err && (err.response?.text || err.message || err));
   }
 }
-
-
 
 // ---------- Booking Email Logic ----------
 async function sendBookingEmails(name, email, phone, room, guests, checkIn, checkOut) {
@@ -224,7 +199,6 @@ Check-out: ${checkOut}`,
         <h3>New Booking Received</h3>
         <p><strong>Name:</strong> ${name}</p>
         <p><strong>Email:</strong> ${email}</p>
-
         <p><strong>Phone:</strong> ${phone}</p>
         <p><strong>Room:</strong> ${room}</p>
         <p><strong>Guests:</strong> ${guests}</p>
@@ -268,7 +242,6 @@ We look forward to your stay!
   });
 }
 
-
 // ---------- PUBLIC ROUTES ----------
 
 // Contact endpoint
@@ -276,9 +249,9 @@ app.post("/contact", async (req, res) => {
   try {
     const { name = "", email = "", message = "" } = req.body;
 
-    // Save to DB
-    await dbRun(`INSERT INTO contacts (name, email, message) VALUES (?, ?, ?)`, [name, email, message]);
-    console.log("🆔 Contact inserted successfully");
+    // Save to DB (Postgres)
+    await queryRun(`INSERT INTO contacts (name, email, message) VALUES ($1, $2, $3)`, [name, email, message]);
+
     // Attempt to send emails (Brevo)
     try {
       await sendContactEmails(name, email, message);
@@ -308,14 +281,12 @@ app.post("/book", async (req, res) => {
       guests = 1,
     } = req.body;
 
-    // Insert booking into the database
-    await dbRun(
+    // Insert booking into the database (Postgres)
+    await queryRun(
       `INSERT INTO bookings (name, email, phone, room, guests, check_in, check_out)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [name, email, phone, room, guests, checkIn, checkOut]
     );
-    console.log("🆔 Booking inserted successfully");
     console.log(`✅ Booking saved for ${name}`);
 
     // Attempt to send booking emails (Brevo)
@@ -334,8 +305,8 @@ app.post("/book", async (req, res) => {
     return res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 // ---------- Lounge Booking Route ----------
-// Lounge booking endpoint (replace your current /lounge handler with this)
 app.post("/lounge", async (req, res) => {
   const { name, email, phone, tableType, LoungeGuest, date, time, message } = req.body;
 
@@ -343,11 +314,13 @@ app.post("/lounge", async (req, res) => {
     return res.json({ success: false, message: "All required fields must be filled." });
   }
 
+  console.log("📥 Lounge booking received:", req.body);
+
   try {
-    // Save to database
-    await dbRun(
+    // Save to database (Postgres)
+    await queryRun(
       `INSERT INTO lounge_bookings (name, email, phone, tableType, LoungeGuest, date, time, message)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [name, email, phone, tableType, LoungeGuest, date, time, message]
     );
 
@@ -382,7 +355,7 @@ app.post("/lounge", async (req, res) => {
       htmlContent: `
         <h3>Hi ${name},</h3>
         <p>We’ve received your lounge booking request for <strong>${tableType}</strong> on <strong>${date}</strong> at <strong>${time}</strong>.</p>
-        <p>Our team will contact you shortly  to confirm your reservation.</p>
+        <p>Our team will contact you shortly to confirm your reservation.</p>
         <p>— ${process.env.HOTEL_NAME || "Minista of Enjoyment Lounge and Suite"}</p>
       `,
       textContent: `Hi ${name}, we received your lounge booking for ${tableType} on ${date} at ${time}. We'll contact you to confirm.`
@@ -391,11 +364,10 @@ app.post("/lounge", async (req, res) => {
     console.log(`✅ Lounge booking saved for ${name} (${tableType} on ${date} ${time})`);
     return res.json({ success: true });
   } catch (err) {
-    console.error("❌ Error saving lounge booking:", err && err.message ? err.message : err);
+    console.error("❌ Error saving lounge booking:", err && (err.message || err));
     return res.json({ success: false, message: "Server error" });
   }
 });
-
 
 // ---------- ADMIN (simple) ----------
 let isLoggedIn = false;
@@ -425,7 +397,6 @@ app.get("/admin/login", (req, res) => {
 
 app.post("/admin/login", (req, res) => {
   const { username, password } = req.body || {};
-  // Set credentials via environment if you like, otherwise default below:
   const ADMIN_USER = process.env.ADMIN_USER || "Minista of enjoyment";
   const ADMIN_PASS = process.env.ADMIN_PASS || "6776";
 
@@ -479,7 +450,7 @@ function renderPage(title, heading, headers, rows) {
 // Bookings for admin
 app.get("/admin/bookings", requireLogin, async (req, res) => {
   try {
-    const rows = await dbAll("SELECT * FROM bookings ORDER BY created_at DESC");
+    const rows = await queryAll("SELECT * FROM bookings ORDER BY created_at DESC");
     const rowsHtml = rows.map(r => `
       <tr>
         <td>${r.id}</td>
@@ -490,8 +461,12 @@ app.get("/admin/bookings", requireLogin, async (req, res) => {
         <td>${r.guests}</td>
         <td>${r.check_in}</td>
         <td>${r.check_out}</td>
+        <td>${r.status || "available"}</td>
         <td>${r.created_at}</td>
         <td>
+          <form method="POST" action="/admin/bookings/toggle/${r.id}" style="display:inline;">
+            <button type="submit" class="btn btn-sm ${r.status === "booked" ? "btn-secondary" : "btn-success"}">${r.status === "booked" ? "Mark Available" : "Mark Booked"}</button>
+          </form>
           <form method="POST" action="/admin/bookings/delete/${r.id}" style="display:inline;" onsubmit="return confirm('Delete this booking?');">
             <button type="submit" class="btn btn-sm btn-danger">Delete</button>
           </form>
@@ -500,7 +475,7 @@ app.get("/admin/bookings", requireLogin, async (req, res) => {
           </form>
         </td>
       </tr>`).join("");
-    res.send(renderPage("Bookings", "📑 All Bookings", ["ID","Name","Email","Phone","Room","Guests","Check-in","Check-out","Created","Actions"], rowsHtml));
+    res.send(renderPage("Bookings", "📑 All Bookings", ["ID","Name","Email","Phone","Room","Guests","Check-in","Check-out","Status","Created","Actions"], rowsHtml));
   } catch (err) {
     console.error("❌ Admin bookings error:", err);
     res.status(500).send("Error loading bookings");
@@ -508,20 +483,20 @@ app.get("/admin/bookings", requireLogin, async (req, res) => {
 });
 
 // Delete booking
-app.post("/admin/bookings/delete/:id", requireLogin, (req, res) => {
-  db.run("DELETE FROM bookings WHERE id = ?", [req.params.id], function (err) {
-    if (err) {
-      console.error("❌ Delete error:", err.message);
-      return res.status(500).send("Error deleting booking");
-    }
+app.post("/admin/bookings/delete/:id", requireLogin, async (req, res) => {
+  try {
+    await queryRun("DELETE FROM bookings WHERE id = $1", [req.params.id]);
     res.redirect("/admin/bookings");
-  });
+  } catch (err) {
+    console.error("❌ Delete error:", err);
+    res.status(500).send("Error deleting booking");
+  }
 });
 
 // Edit booking (GET + POST)
 app.get("/admin/bookings/edit/:id", requireLogin, async (req, res) => {
   try {
-    const row = await dbGet("SELECT * FROM bookings WHERE id = ?", [req.params.id]);
+    const row = await queryOne("SELECT * FROM bookings WHERE id = $1", [req.params.id]);
     if (!row) return res.status(404).send("<h1>Booking not found</h1>");
     res.send(`
       <html>
@@ -547,24 +522,24 @@ app.get("/admin/bookings/edit/:id", requireLogin, async (req, res) => {
   }
 });
 
-app.post("/admin/bookings/edit/:id", requireLogin, (req, res) => {
-  const { name, email, phone, room, guests, check_in, check_out } = req.body;
-  db.run(`UPDATE bookings SET name=?, email=?, phone=?, room=?, guests=?, check_in=?, check_out=? WHERE id=?`,
-    [name, email, phone, room, guests, check_in, check_out, req.params.id],
-    (err) => {
-      if (err) {
-        console.error("❌ Update booking error:", err);
-        return res.status(500).send("Error updating booking");
-      }
-      res.redirect("/admin/bookings");
-    }
-  );
+app.post("/admin/bookings/edit/:id", requireLogin, async (req, res) => {
+  try {
+    const { name, email, phone, room, guests, check_in, check_out } = req.body;
+    await queryRun(
+      `UPDATE bookings SET name=$1, email=$2, phone=$3, room=$4, guests=$5, check_in=$6, check_out=$7 WHERE id=$8`,
+      [name, email, phone, room, guests, check_in, check_out, req.params.id]
+    );
+    res.redirect("/admin/bookings");
+  } catch (err) {
+    console.error("❌ Update booking error:", err);
+    res.status(500).send("Error updating booking");
+  }
 });
 
 // Contacts admin
 app.get("/admin/contacts", requireLogin, async (req, res) => {
   try {
-    const rows = await dbAll("SELECT * FROM contacts ORDER BY created_at DESC");
+    const rows = await queryAll("SELECT * FROM contacts ORDER BY created_at DESC");
     const rowsHtml = rows.map(r => `
       <tr>
         <td>${r.id}</td>
@@ -588,16 +563,19 @@ app.get("/admin/contacts", requireLogin, async (req, res) => {
   }
 });
 
-app.post("/admin/contacts/delete/:id", requireLogin, (req, res) => {
-  db.run("DELETE FROM contacts WHERE id = ?", [req.params.id], (err) => {
-    if (err) return res.status(500).send("Error deleting contact");
+app.post("/admin/contacts/delete/:id", requireLogin, async (req, res) => {
+  try {
+    await queryRun("DELETE FROM contacts WHERE id = $1", [req.params.id]);
     res.redirect("/admin/contacts");
-  });
+  } catch (err) {
+    console.error("❌ Delete contact error:", err);
+    res.status(500).send("Error deleting contact");
+  }
 });
 
 app.get("/admin/contacts/edit/:id", requireLogin, async (req, res) => {
   try {
-    const row = await dbGet("SELECT * FROM contacts WHERE id = ?", [req.params.id]);
+    const row = await queryOne("SELECT * FROM contacts WHERE id = $1", [req.params.id]);
     if (!row) return res.status(404).send("<h1>Contact not found</h1>");
     res.send(`
       <html>
@@ -619,86 +597,44 @@ app.get("/admin/contacts/edit/:id", requireLogin, async (req, res) => {
   }
 });
 
-app.post("/admin/contacts/edit/:id", requireLogin, (req, res) => {
-  const { name, email, message } = req.body;
-  db.run(`UPDATE contacts SET name=?, email=?, message=? WHERE id=?`, [name, email, message, req.params.id], (err) => {
-    if (err) return res.status(500).send("Error updating contact");
-    res.redirect("/admin/contacts");
-  });
-});
-// ---------- Room Booking Status Feature ----------
-
-// Ensure 'status' column exists in bookings table
-db.run(`ALTER TABLE bookings ADD COLUMN status TEXT DEFAULT 'available'`, (err) => {
-  if (err && !err.message.includes("duplicate column")) {
-    console.error("⚠️ Couldn't add status column:", err.message);
-  }
-});
-
-// Show status column in admin bookings page
-app.get("/admin/bookings", requireLogin, async (req, res) => {
+app.post("/admin/contacts/edit/:id", requireLogin, async (req, res) => {
   try {
-    const rows = await dbAll("SELECT * FROM bookings ORDER BY created_at DESC");
-    const rowsHtml = rows
-      .map(
-        (r) => `
-      <tr>
-        <td>${r.id}</td>
-        <td>${r.name}</td>
-        <td>${r.email}</td>
-        <td>${r.phone}</td>
-        <td>${r.room}</td>
-        <td>${r.guests}</td>
-        <td>${r.check_in}</td>
-        <td>${r.check_out}</td>
-        <td>${r.status || "available"}</td>
-        <td>${r.created_at}</td>
-        <td>
-          <form method="POST" action="/admin/bookings/toggle/${r.id}" style="display:inline;">
-            <button type="submit" class="btn btn-sm ${
-              r.status === "booked" ? "btn-secondary" : "btn-success"
-            }">${r.status === "booked" ? "Mark Available" : "Mark Booked"}</button>
-          </form>
-          <form method="POST" action="/admin/bookings/delete/${r.id}" style="display:inline;" onsubmit="return confirm('Delete this booking?');">
-            <button type="submit" class="btn btn-sm btn-danger">Delete</button>
-          </form>
-          <form method="GET" action="/admin/bookings/edit/${r.id}" style="display:inline;">
-            <button type="submit" class="btn btn-sm btn-warning">Edit</button>
-          </form>
-        </td>
-      </tr>`
-      )
-      .join("");
-    res.send(
-      renderPage(
-        "Bookings",
-        "📑 All Bookings",
-        ["ID","Name","Email","Phone","Room","Guests","Check-in","Check-out","Status","Created","Actions"],
-        rowsHtml
-      )
-    );
+    const { name, email, message } = req.body;
+    await queryRun(`UPDATE contacts SET name=$1, email=$2, message=$3 WHERE id=$4`, [name, email, message, req.params.id]);
+    res.redirect("/admin/contacts");
   } catch (err) {
-    console.error("❌ Admin bookings error:", err);
-    res.status(500).send("Error loading bookings");
+    console.error("❌ Update contact error:", err);
+    res.status(500).send("Error updating contact");
   }
 });
 
-// Toggle booking status
+// ---------- Room Booking Status Feature ----------
+// Ensure 'status' column exists in bookings table (Postgres supports IF NOT EXISTS for add column)
+(async () => {
+  try {
+    await queryRun(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'available'`);
+  } catch (e) {
+    console.warn("⚠️ Could not ALTER bookings table:", e.message || e);
+  }
+})();
+
+// Show status column in admin bookings page (already handled above)
+
 // Toggle booking status + sync with rooms table
 app.post("/admin/bookings/toggle/:id", requireLogin, async (req, res) => {
   try {
-    const booking = await dbGet("SELECT status, room FROM bookings WHERE id = ?", [req.params.id]);
+    const booking = await queryOne("SELECT status, room FROM bookings WHERE id = $1", [req.params.id]);
     if (!booking) return res.status(404).send("Booking not found");
 
     const newStatus = booking.status === "booked" ? "available" : "booked";
 
     // Update the booking itself
-    await dbRun("UPDATE bookings SET status = ? WHERE id = ?", [newStatus, req.params.id]);
+    await queryRun("UPDATE bookings SET status = $1 WHERE id = $2", [newStatus, req.params.id]);
 
     // Also update the room table so frontend reflects the same status
-    await dbRun("UPDATE rooms SET status = ? WHERE name = ?", [newStatus, booking.room]);
+    await queryRun("UPDATE rooms SET status = $1 WHERE name = $2", [newStatus, booking.room]);
 
-    console.log('✅ Booking ID ${req.params.id} marked as ${newStatus}');
+    console.log(`✅ Booking ID ${req.params.id} marked as ${newStatus}`);
     res.redirect("/admin/bookings");
   } catch (err) {
     console.error("❌ Toggle booking status sync error:", err);
@@ -709,17 +645,19 @@ app.post("/admin/bookings/toggle/:id", requireLogin, async (req, res) => {
 // API endpoint to get current room status (for frontend)
 app.get("/api/rooms/status", async (req, res) => {
   try {
-    const rooms = await dbAll("SELECT name, status FROM rooms");
-    res.json({ success: true, rooms });
+    const rows = await queryAll("SELECT name, status FROM rooms");
+    console.log("📡 Room status data:", rows);
+    res.json({ success: true, rooms: rows });
   } catch (err) {
     console.error("Error fetching room status:", err);
-    res.status(500).json({ success: false, message: "Error fetching room status" });
-  }
+    res.status(500).json({ success: false, message: "Error fetching room status" });
+  }
 });
+
 // ---------- ADMIN: Room Management ----------
 app.get("/admin/rooms", requireLogin, async (req, res) => {
   try {
-    const rows = await dbAll("SELECT * FROM rooms ORDER BY id ASC");
+    const rows = await queryAll("SELECT * FROM rooms ORDER BY id ASC");
     const rowsHtml = rows.map(r => `
       <tr>
         <td>${r.id}</td>
@@ -744,10 +682,10 @@ app.get("/admin/rooms", requireLogin, async (req, res) => {
 // Toggle room status
 app.post("/admin/rooms/toggle/:id", requireLogin, async (req, res) => {
   try {
-    const room = await dbGet("SELECT status FROM rooms WHERE id = ?", [req.params.id]);
-    if (!room) return res.status(404).send("Room not found");
-    const newStatus = room.status === "booked" ? "available" : "booked";
-    await dbRun("UPDATE rooms SET status = ? WHERE id = ?", [newStatus, req.params.id]);
+    const row = await queryOne("SELECT status FROM rooms WHERE id = $1", [req.params.id]);
+    if (!row) return res.status(404).send("Room not found");
+    const newStatus = row.status === "booked" ? "available" : "booked";
+    await queryRun("UPDATE rooms SET status = $1 WHERE id = $2", [newStatus, req.params.id]);
     console.log(`✅ Room ID ${req.params.id} marked as ${newStatus}`);
     res.redirect("/admin/rooms");
   } catch (err) {
@@ -756,25 +694,11 @@ app.post("/admin/rooms/toggle/:id", requireLogin, async (req, res) => {
   }
 });
 
-// API endpoint for frontend to check booked rooms
-// ✅ Get all room statuses
-app.get("/api/rooms/status", (req, res) => {
-  db.all("SELECT name, status FROM rooms", (err, rows) => {
-    if (err) {
-      console.error("❌ Error fetching room status:", err.message);
-      return res.json({ success: false });
-    }
+// API endpoint for frontend to check booked rooms (same as /api/rooms/status above)
 
-    // Log data for debugging
-    console.log("📡 Room status data:", rows);
+// diagnostic logs
+console.log("💾 Pool config present:", !!process.env.DATABASE_URL);
 
-    res.json({ success: true, rooms: rows });
-  });
-});
-const fs = require("fs");
-
-console.log("📂 Using database file:", path.resolve("hotel.db"));
-console.log("💾 Database file exists:", fs.existsSync(path.resolve("hotel.db")));
 // ---------- Start server ----------
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Running at http://localhost:${PORT}`));
