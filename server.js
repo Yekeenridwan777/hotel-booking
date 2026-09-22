@@ -22,10 +22,16 @@ const fs = require("fs");
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: {
-    rejectUnauthorized: false
+    rejectUnauthorized: false,
   },
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000,
+  keepAlive: true,
+});
+
+// Handle pool background errors so the app doesn't crash on idle disconnects
+pool.on("error", (err) => {
+  console.error("Unexpected error on idle PostgreSQL client:", err);
 });
 
 console.log("📂 Using DATABASE_URL from env:", !!process.env.DATABASE_URL);
@@ -44,7 +50,6 @@ async function queryRun(text, params = []) {
   // returns the full result (for checking rowCount / insert id where applicable)
   return pool.query(text, params);
 }
-
 // Initialize tables (similar schema to your earlier SQLite version)
 async function initDB() {
   try {
