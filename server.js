@@ -122,32 +122,28 @@ async function initDB() {
 initDB().catch((e) => console.error("initDB failed:", e));
 
 // ---------- Brevo Setup ----------
-const brevoClient = new Brevo.TransactionalEmailsApi();
+const Brevo = require("@getbrevo/brevo");
 
-if (!process.env.BREVO_API_KEY) {
-  console.warn("⚠️ BREVO_API_KEY is not set. Emails will fail.");
-} else {
-  brevoClient.setApiKey(Brevo.TransactionalEmailsApiApiKeys.apiKey, process.env.BREVO_API_KEY);
-}
+async function sendBookingEmail(bookingData) {
+  const apiInstance = new Brevo.TransactionalEmailsApi();
+  
+  // Set the key explicitly here so it always reads process.env.BREVO_API_KEY at runtime
+  apiInstance.setApiKey(
+    Brevo.TransactionalEmailsApiApiKey.apiKey,
+    process.env.BREVO_API_KEY ? process.env.BREVO_API_KEY.trim() : ""
+  );
 
-// ---------- Email Sender Helper ----------
-async function sendTransacEmail({ fromEmail, toEmails = [], subject = "", htmlContent = "", textContent = "" }) {
-  if (!process.env.BREVO_API_KEY) {
-    throw new Error("Brevo client not configured (missing BREVO_API_KEY)");
-  }
-
-  const payload = {
-    sender: { email: fromEmail },
-    to: toEmails.map(email => ({ email })),
-    subject,
+  const sendSmtpEmail = new Brevo.SendSmtpEmail();
+  sendSmtpEmail.subject = "Booking Confirmation";
+  sendSmtpEmail.sender = { 
+    name: "Minister of Enjoyment", 
+    email: process.env.EMAIL_FROM || "info@ministaofenjoyment.com" 
   };
+  sendSmtpEmail.to = [{ email: bookingData.email, name: bookingData.name }];
+  sendSmtpEmail.htmlContent = `<p>Thank you for your booking, ${bookingData.name}!</p>`;
 
-  if (htmlContent) payload.htmlContent = htmlContent;
-  if (textContent) payload.textContent = textContent;
-
-  return brevoClient.sendTransacEmail(payload);
+  return apiInstance.sendTransacEmail(sendSmtpEmail);
 }
-
 // ---------- Contact Email Logic ----------
 async function sendContactEmails(name, email, message) {
   const from = process.env.EMAIL_FROM || process.env.ADMIN_EMAIL;
