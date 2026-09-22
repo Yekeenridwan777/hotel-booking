@@ -122,16 +122,13 @@ async function initDB() {
 initDB().catch((e) => console.error("initDB failed:", e));
 
 // ---------- Brevo Setup ----------
-const Brevo = require("@getbrevo/brevo");
 
 async function sendBookingEmail(bookingData) {
   const apiInstance = new Brevo.TransactionalEmailsApi();
   
-  // Set the key explicitly here so it always reads process.env.BREVO_API_KEY at runtime
-  apiInstance.setApiKey(
-    Brevo.TransactionalEmailsApiApiKey.apiKey,
-    process.env.BREVO_API_KEY ? process.env.BREVO_API_KEY.trim() : ""
-  );
+  // Clean the key string from env to prevent formatting issues
+  const apiKey = (process.env.BREVO_API_KEY || "").trim().replace(/['"]/g, '');
+  apiInstance.setApiKey(Brevo.TransactionalEmailsApiApiKeys.apiKey, apiKey);
 
   const sendSmtpEmail = new Brevo.SendSmtpEmail();
   sendSmtpEmail.subject = "Booking Confirmation";
