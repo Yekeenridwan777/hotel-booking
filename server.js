@@ -22,6 +22,8 @@ const fs = require("fs");
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
 });
 
 console.log("📂 Using DATABASE_URL from env:", !!process.env.DATABASE_URL);
@@ -68,6 +70,9 @@ async function initDB() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    // Ensure status column exists in case the table was created previously without it
+    await pool.query(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'available'`);
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS rooms (
@@ -398,7 +403,7 @@ app.get("/admin/login", (req, res) => {
 app.post("/admin/login", (req, res) => {
   const { username, password } = req.body || {};
   const ADMIN_USER = process.env.ADMIN_USER || "Minista of enjoyment";
-  const ADMIN_PASS = process.env.ADMIN_PASS || "6776";
+  const ADMIN_PASS = process.env.ADMIN_PASS || "dollress";
 
   if (username === ADMIN_USER && password === ADMIN_PASS) {
     isLoggedIn = true;
@@ -608,18 +613,6 @@ app.post("/admin/contacts/edit/:id", requireLogin, async (req, res) => {
   }
 });
 
-// ---------- Room Booking Status Feature ----------
-// Ensure 'status' column exists in bookings table (Postgres supports IF NOT EXISTS for add column)
-(async () => {
-  try {
-    await queryRun(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'available'`);
-  } catch (e) {
-    console.warn("⚠️ Could not ALTER bookings table:", e.message || e);
-  }
-})();
-
-// Show status column in admin bookings page (already handled above)
-
 // Toggle booking status + sync with rooms table
 app.post("/admin/bookings/toggle/:id", requireLogin, async (req, res) => {
   try {
@@ -693,8 +686,6 @@ app.post("/admin/rooms/toggle/:id", requireLogin, async (req, res) => {
     res.status(500).send("Error toggling room status");
   }
 });
-
-// API endpoint for frontend to check booked rooms (same as /api/rooms/status above)
 
 // diagnostic logs
 console.log("💾 Pool config present:", !!process.env.DATABASE_URL);
