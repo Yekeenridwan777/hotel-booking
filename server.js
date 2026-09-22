@@ -124,8 +124,11 @@ initDB().catch((e) => console.error("initDB failed:", e));
 // ---------- Brevo Setup ----------
 
 async function sendTransacEmail({ fromEmail, toEmails, subject, htmlContent, textContent }) {
-  const apiKey = (process.env.BREVO_API_KEY || "").trim().replace(/['"]/g, '');
-  
+  const rawKey = process.env.BREVO_API_KEY || "";
+  const apiKey = rawKey.trim().replace(/['"]/g, '');
+
+  console.log(`🔑 Key check - Length: ${apiKey.length}, Starts with: ${apiKey.substring(0, 12)}...`);
+
   const apiInstance = new Brevo.TransactionalEmailsApi();
   apiInstance.setApiKey(Brevo.TransactionalEmailsApiApiKeys.apiKey, apiKey);
 
