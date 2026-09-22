@@ -3,7 +3,7 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const cors = require("cors");
 require("dotenv").config();
-const { BrevoClient } = require("@getbrevo/brevo"); // Brevo transactional email API
+const Brevo = require("@getbrevo/brevo"); // Brevo transactional email API
 
 const app = express();
 app.use(cors());
@@ -125,18 +125,21 @@ initDB().catch((e) => console.error("initDB failed:", e));
 
 async function sendTransacEmail({ fromEmail, toEmails, subject, htmlContent, textContent }) {
   const apiKey = (process.env.BREVO_API_KEY || "").trim().replace(/['"]/g, '');
-  const brevo = new BrevoClient({ apiKey });
+  
+  const apiInstance = new Brevo.TransactionalEmailsApi();
+  apiInstance.setApiKey(Brevo.TransactionalEmailsApiApiKeys.apiKey, apiKey);
 
-  return brevo.transactionalEmails.sendTransacEmail({
-    subject: subject,
-    sender: { 
-      name: process.env.HOTEL_NAME || "Minister of Enjoyment", 
-      email: fromEmail || process.env.EMAIL_FROM || "info@ministaofenjoyment.com" 
-    },
-    to: (toEmails || []).map(email => ({ email })),
-    htmlContent: htmlContent,
-    textContent: textContent
-  });
+  const sendSmtpEmail = new Brevo.SendSmtpEmail();
+  sendSmtpEmail.subject = subject;
+  sendSmtpEmail.sender = { 
+    name: process.env.HOTEL_NAME || "Minister of Enjoyment", 
+    email: fromEmail || process.env.EMAIL_FROM || "info@ministaofenjoyment.com" 
+  };
+  sendSmtpEmail.to = (toEmails || []).map(email => ({ email }));
+  sendSmtpEmail.htmlContent = htmlContent;
+  if (textContent) sendSmtpEmail.textContent = textContent;
+
+  return apiInstance.sendTransacEmail(sendSmtpEmail);
 }
 // ---------- Contact Email Logic ----------
 async function sendContactEmails(name, email, message) {
