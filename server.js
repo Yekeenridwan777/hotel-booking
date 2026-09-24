@@ -105,7 +105,7 @@ async function initDB() {
       )
     `);
 // ---------- Initialize Hotel Rooms ----------
-
+// Default rooms
 const defaultRooms = [
   "Room 901",
   "Room 902",
@@ -114,26 +114,19 @@ const defaultRooms = [
   "Room 905"
 ];
 
-// Rename old rooms first
-const oldRoomNames = {
-  "Room 1": "Room 901",
-  "Room 2": "Room 902",
-  "Room 3": "Room 903",
-  "Room 4": "Room 904",
-  "Room 5": "Room 905"
-};
+// Delete old duplicate rooms
+await pool.query(`
+  DELETE FROM rooms
+  WHERE name IN (
+    'Room 1',
+    'Room 2',
+    'Room 3',
+    'Room 4',
+    'Room 5'
+  )
+`);
 
-for (const [oldName, newName] of Object.entries(oldRoomNames)) {
-  await pool.query(
-    `UPDATE rooms
-     SET name = $1
-     WHERE name = $2
-     AND NOT EXISTS (
-       SELECT 1 FROM rooms WHERE name = $1
-     )`,
-    [newName, oldName]
-  );
-}
+console.log("✅ Old duplicate rooms deleted");
 
 // Insert missing rooms
 for (const room of defaultRooms) {
@@ -147,13 +140,12 @@ for (const room of defaultRooms) {
 
 console.log("✅ PostgreSQL tables ready!");
 
-  } catch (err) {
-    console.error("❌ DB initialization error:", err);
-  }
+} catch (err) {
+  console.error("❌ DB initialization error:", err);
+}
 }
 
 initDB().catch((e) => console.error("initDB failed:", e));
-
 // ---------- Brevo Setup ----------
 
 async function sendTransacEmail({ fromEmail, toEmails, subject, htmlContent, textContent }) {
