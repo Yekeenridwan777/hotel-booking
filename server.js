@@ -146,6 +146,14 @@ for (const room of defaultRooms) {
 }
 
 console.log("✅ PostgreSQL tables ready!");
+
+  } catch (err) {
+    console.error("❌ DB initialization error:", err);
+  }
+}
+
+initDB().catch((e) => console.error("initDB failed:", e));
+
 // ---------- Brevo Setup ----------
 
 async function sendTransacEmail({ fromEmail, toEmails, subject, htmlContent, textContent }) {
