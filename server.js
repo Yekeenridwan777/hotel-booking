@@ -104,35 +104,48 @@ async function initDB() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+// ---------- Initialize Hotel Rooms ----------
 
-    // Initialize rooms 1–5
-    const defaultRooms = ["Room 901", "Room 902", "Room 903", "Room 904", "Room 905"];
-    for (const room of defaultRooms) {
-      await pool.query(
-        `INSERT INTO rooms (name, status) VALUES ($1, 'available') ON CONFLICT (name) DO NOTHING`,
-        [room]
-      );
-    }
-// Rename existing rooms
-await pool.query(`
-  UPDATE rooms
-  SET name = CASE name
-    WHEN 'Room 1' THEN 'Room 901'
-    WHEN 'Room 2' THEN 'Room 902'
-    WHEN 'Room 3' THEN 'Room 903'
-    WHEN 'Room 4' THEN 'Room 904'
-    WHEN 'Room 5' THEN 'Room 905'
-    ELSE name
-  END
-  WHERE name IN ('Room 1', 'Room 2', 'Room 3', 'Room 4', 'Room 5')
-`);
-    console.log("✅ PostgreSQL tables ready!");
-  } catch (err) {
-    console.error("❌ DB initialization error:", err);
-  }
+const defaultRooms = [
+  "Room 901",
+  "Room 902",
+  "Room 903",
+  "Room 904",
+  "Room 905"
+];
+
+// Rename old rooms first
+const oldRoomNames = {
+  "Room 1": "Room 901",
+  "Room 2": "Room 902",
+  "Room 3": "Room 903",
+  "Room 4": "Room 904",
+  "Room 5": "Room 905"
+};
+
+for (const [oldName, newName] of Object.entries(oldRoomNames)) {
+  await pool.query(
+    `UPDATE rooms
+     SET name = $1
+     WHERE name = $2
+     AND NOT EXISTS (
+       SELECT 1 FROM rooms WHERE name = $1
+     )`,
+    [newName, oldName]
+  );
 }
-initDB().catch((e) => console.error("initDB failed:", e));
 
+// Insert missing rooms
+for (const room of defaultRooms) {
+  await pool.query(
+    `INSERT INTO rooms (name, status)
+     VALUES ($1, 'available')
+     ON CONFLICT (name) DO NOTHING`,
+    [room]
+  );
+}
+
+console.log("✅ PostgreSQL tables ready!");
 // ---------- Brevo Setup ----------
 
 async function sendTransacEmail({ fromEmail, toEmails, subject, htmlContent, textContent }) {
