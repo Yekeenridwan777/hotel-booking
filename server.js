@@ -460,6 +460,7 @@ function renderPage(title, heading, headers, rows) {
       <body class="container py-4">
         <nav class="mb-4">
           <a href="/admin/bookings" class="btn btn-primary me-2">📑 Bookings</a>
+          <a href="/admin/lounge_bookings" class="btn btn-warning me-2">🍸 Lounge</a>
           <a href="/admin/rooms" class="btn btn-success me-2">🏨 Rooms</a>
           <a href="/admin/contacts" class="btn btn-info me-2">📧 Contacts</a>
           <a href="/admin/logout" class="btn btn-danger">🚪 Logout</a>
@@ -714,7 +715,63 @@ app.post("/admin/rooms/toggle/:id", requireLogin, async (req, res) => {
     res.status(500).send("Error toggling room status");
   }
 });
+// ---------- ADMIN: Lounge Bookings ----------
+app.get("/admin/lounge_bookings", requireLogin, async (req, res) => {
+  try {
+    const rows = await queryAll("SELECT * FROM lounge_bookings ORDER BY created_at DESC");
+    const rowsHtml = rows.map(r => `
+      <tr>
+        <td>${r.id}</td>
+        <td>${r.name}</td>
+        <td>${r.email}</td>
+        <td>${r.phone}</td>
+        <td>${r.tabletype || r.tableType}</td>
+        <td>${r.loungeguest || r.LoungeGuest}</td>
+        <td>${r.date}</td>
+        <td>${r.time}</td>
+        <td>${r.message || ''}</td>
+        <td><span class="badge ${r.status === 'confirmed' ? 'bg-success' : 'bg-warning text-dark'}">${r.status}</span></td>
+        <td>${r.created_at}</td>
+        <td>
+          <form method="POST" action="/admin/lounge_bookings/toggle/${r.id}" style="display:inline;">
+            <button type="submit" class="btn btn-sm ${r.status === 'confirmed' ? 'btn-secondary' : 'btn-success'}">${r.status === 'confirmed' ? 'Mark Pending' : 'Confirm'}</button>
+          </form>
+          <form method="POST" action="/admin/lounge_bookings/delete/${r.id}" style="display:inline;" onsubmit="return confirm('Delete this lounge booking?');">
+            <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+          </form>
+        </td>
+      </tr>`).join("");
 
+    res.send(renderPage("Lounge Bookings", "🍸 All Lounge Bookings", 
+    ["ID","Name","Email","Phone","Table Type","Guests","Date","Time","Message","Status","Created","Actions"], rowsHtml));
+  } catch (err) {
+    console.error("❌ Admin lounge error:", err);
+    res.status(500).send("Error loading lounge bookings");
+  }
+});
+
+app.post("/admin/lounge_bookings/delete/:id", requireLogin, async (req, res) => {
+  try {
+    await queryRun("DELETE FROM lounge_bookings WHERE id = $1", [req.params.id]);
+    res.redirect("/admin/lounge_bookings");
+  } catch (err) {
+    console.error("❌ Delete lounge error:", err);
+    res.status(500).send("Error deleting");
+  }
+});
+
+app.post("/admin/lounge_bookings/toggle/:id", requireLogin, async (req, res) => {
+  try {
+    const row = await queryOne("SELECT status FROM lounge_bookings WHERE id = $1", [req.params.id]);
+    if (!row) return res.status(404).send("Not found");
+    const newStatus = row.status === 'confirmed' ? 'pending' : 'confirmed';
+    await queryRun("UPDATE lounge_bookings SET status = $1 WHERE id = $2", [newStatus, req.params.id]);
+    res.redirect("/admin/lounge_bookings");
+  } catch (err) {
+    console.error("❌ Toggle lounge error:", err);
+    res.status(500).send("Error toggling");
+  }
+});
 // diagnostic logs
 console.log("💾 Pool config present:", !!process.env.DATABASE_URL);
 
