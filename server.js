@@ -114,17 +114,25 @@ const defaultRooms = [
   "Room 905"
 ];
 
-// Delete old duplicate rooms
-await pool.query(`
-  DELETE FROM rooms
-  WHERE name IN (
-    'Room 1',
-    'Room 2',
-    'Room 3',
-    'Room 4',
-    'Room 5'
-  )
-`);
+// Delete old duplicate or wrong hotel rooms
+  await pool.query(`
+    DELETE FROM rooms
+    WHERE name IN (
+      'Las Vegas',
+      'Miami',
+      'New York',
+      'California',
+      'Texas',
+      'Alaska',
+      'Chicago',
+      'Florida',
+      'Room 1',
+      'Room 2',
+      'Room 3',
+      'Room 4',
+      'Room 5'
+    )
+  `);
 
 console.log("✅ Old duplicate rooms deleted");
 
